@@ -108,7 +108,8 @@ class Anderson(Acceleration, ABC):
         assert batch_size < input_data.shape[0]
 
         # Define the objective function to optimize during the training of the neural network
-        loss = self.criterion(input_data, target)
+        output = self.model.get_model()(input_data)
+        loss   = self.criterion(output, target)
 
         epoch_counter = 0
 
