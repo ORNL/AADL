@@ -3,17 +3,35 @@ import torch
 import numpy
 
 
-# This is an ABSTRACT class
-class NeuralNetwork(object, metaclass=ABCMeta):
+def activation_function(name_activation):
+    if name_activation == 'relu':
+        return torch.nn.ReLU()
+    elif name_activation == 'sigmoid':
+        return torch.nn.Sigmoid()
+    elif name_activation == 'softmax':
+        return torch.nn.Softmax()
+    elif name_activation == 'tanh':
+        return torch.nn.Tanh()
+    else:
+        raise ValueError("Activation function not recognized")
 
-    def __init__(self, input_dim: int, output_dim: int, num_neurons_list: list, use_bias: bool):
+
+# This is an ABSTRACT class
+class NeuralNetwork(torch.nn.Module, metaclass=ABCMeta):
+
+    def __init__(self, input_dim: int, output_dim: int, num_neurons_list: list, use_bias: bool, activation: str,
+                 classification: bool):
         """
 
         :param input_dim: :type int
         :param output_dim: :type int
         :param num_neurons_list: :type list
         :param use_bias: :type bool
+        :param activation: :type str
+        :param classification: :type bool
         """
+        super().__init__()
+
         self.device = torch.device('cpu')
 
         assert isinstance(input_dim, int) or isinstance(input_dim, tuple)
@@ -32,33 +50,22 @@ class NeuralNetwork(object, metaclass=ABCMeta):
 
         self.model = None
         self.layers = []
-        self.training_loss_history = []
-        self.loss_function_specified = False
-        self.criterion = None
 
-    def evaluate(self, input_data):
+        assert isinstance(activation, str)
+        self.activation = activation
+
+        assert isinstance(classification, bool)
+        self.classification = classification
+
+    def forward(self, input_data):
         """
 
-        :param input_data: :type: int
+        :param input_data: :type: float
         """
-        assert (input_data.shape[1:] == self.input_dim)
-
-        # Before using the neural network for predictions, we need to specify that the learning has finished
-        self.model.train(mode=False)
-
         x = input_data
         y = self.model(x.float())
 
         return y
-
-    def to(self, device):
-        """
-
-        :param device: :type: torch.device
-        """
-        assert isinstance(device, torch.device)
-        self.model.to(device)
-        self.device = device
 
     # getter method for model
     def get_model(self):
@@ -103,9 +110,10 @@ class NeuralNetwork(object, metaclass=ABCMeta):
                     torch.nn.init.normal_(layer.bias)
 
 
-class MLPRegression(NeuralNetwork, ABC):
+class MLP(NeuralNetwork, ABC):
 
-    def __init__(self, input_dim: int, output_dim: int, num_neurons_list: list, use_bias: bool):
+    def __init__(self, input_dim: int, output_dim: int, num_neurons_list: list, use_bias: bool, activation: str,
+                 classification=False):
         """
 
         :param input_dim: :type int
@@ -113,27 +121,33 @@ class MLPRegression(NeuralNetwork, ABC):
         :param num_neurons_list: :type list
         :param use_bias: :type bool
         """
-        super(MLPRegression, self).__init__(input_dim, output_dim, num_neurons_list, use_bias)
+        super(MLP, self).__init__(input_dim, output_dim, num_neurons_list, use_bias, activation, classification)
 
         # Input layer
         self.layers += [torch.nn.Linear(self.input_dim, self.num_neurons_list[0], bias=self.use_bias)]
-        self.layers += [torch.nn.ReLU()]
+        self.layers += [activation_function(self.activation)]
 
         # Hidden layers
         for layer_index in range(0, len(self.num_neurons_list) - 1):
             self.layers += [torch.nn.Linear(self.num_neurons_list[layer_index], self.num_neurons_list[layer_index + 1],
                                             bias=self.use_bias)]
-            self.layers += [torch.nn.ReLU()]
+            self.layers += [activation_function(self.activation)]
 
         # Output layer
         self.layers += [torch.nn.Linear(self.num_neurons_list[-1], self.output_dim, bias=self.use_bias)]
 
+        # Activation function for classification problem
+        if classification:
+            self.layers += [torch.nn.Softmax()]
+
+        # Multilayer perceptron
         self.model = torch.nn.Sequential(*self.layers)
 
 
-class CNNClassification2D(NeuralNetwork, ABC):
+class CNN2D(NeuralNetwork, ABC):
 
-    def __init__(self, input_dim: int, output_dim: int, num_neurons_list: list, use_bias: bool, **kwargs):
+    def __init__(self, input_dim: int, output_dim: int, num_neurons_list: list, use_bias: bool, activation: str,
+                 classification=False, **kwargs):
         """
 
         :param input_dim: :type int
@@ -141,7 +155,8 @@ class CNNClassification2D(NeuralNetwork, ABC):
         :param num_neurons_list: :type list
         :param use_bias: :type bool
         """
-        super(CNNClassification2D, self).__init__(input_dim, output_dim, num_neurons_list, use_bias, **kwargs)
+        super(CNN2D, self).__init__(input_dim, output_dim, num_neurons_list, use_bias, activation, classification,
+                                    **kwargs)
 
         self.kernel_size_list = kwargs.get("kernel_size_list", None)
         self.max_pooling_list = kwargs.get("max_pooling_list", None)
@@ -171,7 +186,6 @@ class CNNClassification2D(NeuralNetwork, ABC):
             assert isinstance(self.stride_list, list)
             assert len(self.stride_list) == len(self.stride_list)
 
-
         if self.kernel_size_list is not None:
             ker_size = self.kernel_size_list[0]
         else:
@@ -191,14 +205,16 @@ class CNNClassification2D(NeuralNetwork, ABC):
                                             out_channels=self.num_neurons_list[layer_index + 1],
                                             kernel_size=ker_size, stride=1, padding=1,
                                             bias=self.use_bias)]
-            self.layers += [torch.nn.ReLU()]
+            self.layers += [activation_function(self.activation)]
 
         # Output layer
         self.layers += [torch.nn.Flatten()]
-        self.layers += [torch.nn.Linear(in_features=self.image_size*self.num_neurons_list[-1], out_features=self.output_dim,
-                                        bias=self.use_bias)]
+        self.layers += [
+            torch.nn.Linear(in_features=self.image_size * self.num_neurons_list[-1], out_features=self.output_dim,
+                            bias=self.use_bias)]
 
         # Activation function for classification problem
         self.layers += [torch.nn.Softmax()]
 
+        # Convolutional neural network
         self.model = torch.nn.Sequential(*self.layers)

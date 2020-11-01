@@ -9,7 +9,7 @@ import math
 
 # Abstract class that provides basic guidelines to implement an acceleration
 class Optimizer(object, metaclass=ABCMeta):
-    def __init__(self, learning_rate: float, weight_decay: float):
+    def __init__(self, learning_rate: float, weight_decay: float = 0.0):
         """
 
         :type learning_rate: float
@@ -97,7 +97,7 @@ class Optimizer(object, metaclass=ABCMeta):
 
 
 class FixedPointIteration(Optimizer, ABC):
-    def __init__(self, learning_rate: float, weight_decay: float):
+    def __init__(self, learning_rate: float, weight_decay: float = 0.0):
         """
 
         :param learning_rate: :type: float
@@ -110,7 +110,7 @@ class FixedPointIteration(Optimizer, ABC):
         assert batch_size < input_data.shape[0]
 
         # Define the objective function to optimize during the training of the neural network
-        output = self.model.evaluate(input_data)
+        output = self.model.forward(input_data)
        
         loss   = self.criterion(output, target)
 
@@ -127,7 +127,7 @@ class FixedPointIteration(Optimizer, ABC):
                 indices = permutation[i:i + batch_size]
                 batch_x, batch_y = input_data[indices], target[indices]
                 self.optimizer.zero_grad()  # zero the gradient buffers
-                output = self.model.evaluate(batch_x)
+                output = self.model.forward(batch_x)
                 self.model.get_model().train(mode=True)
                 loss = self.criterion(output, batch_y)
                 loss.backward()
