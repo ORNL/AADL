@@ -116,9 +116,9 @@ class FixedPointIteration(Optimizer, ABC):
 
         epoch_counter = 0
 
-        permutation = torch.randperm(input_data.size()[0])
-
         while (loss.item() > threshold) & (epoch_counter < num_epochs):
+
+            permutation = torch.randperm(input_data.size()[0])
 
             print("###############################")
             print('Epoch: ' + str(epoch_counter) + ' - Loss function: ' + str(loss.item()))
@@ -128,6 +128,7 @@ class FixedPointIteration(Optimizer, ABC):
                 batch_x, batch_y = input_data[indices], target[indices]
                 self.optimizer.zero_grad()  # zero the gradient buffers
                 output = self.model.evaluate(batch_x)
+                self.model.get_model().train(mode=True)
                 loss = self.criterion(output, batch_y)
                 loss.backward()
                 self.optimizer.step()  # Does the update
