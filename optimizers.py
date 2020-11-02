@@ -135,7 +135,7 @@ class FixedPointIteration(Optimizer, ABC):
                 data, target = data.to(self.model.get_device()), target.to(self.model.get_device())
                 self.optimizer.zero_grad()
                 output = self.model.forward(data)
-                print("Input_data: "+str(data.shape)+' - Output: '+str(output.shape)+' - Target: '+str(target.shape))
+                #print("Input_data: "+str(data.shape)+' - Output: '+str(output.shape)+' - Target: '+str(target.shape))
                 loss = self.criterion(output, target)
                 loss.backward()
                 self.optimizer.step()

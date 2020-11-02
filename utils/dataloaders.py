@@ -30,7 +30,7 @@ def mnist_data(rand_rotation=False, max_degree=90):
         )
     out_dir = '{}/dataset'.format(os.getcwd())
     input_dim = (1, 28, 28)
-    output_dim = 1
+    output_dim = int(10)
     return input_dim, output_dim, datasets.MNIST(
         root=out_dir, train=True, transform=compose, download=True
     )
@@ -46,7 +46,7 @@ def cifar10_data():
     )
     out_dir = '{}/dataset'.format(os.getcwd())
     input_dim = (3, 32, 32)
-    output_dim = 1    
+    output_dim = int(10)
     return input_dim, output_dim, datasets.CIFAR10(
         root=out_dir, train=True, transform=compose, download=True
     )

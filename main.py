@@ -9,8 +9,8 @@ from dataloaders import *
 plt.rcParams.update({'font.size': 16})
 
 # Import data
-#input_dim, output_dim, dataset = graduate_admission_data()
-input_dim, output_dim, dataset = mnist_data()
+input_dim, output_dim, dataset = graduate_admission_data()
+#input_dim, output_dim, dataset = mnist_data()
 
 # Generate dataloader
 dataloader = torch.utils.data.DataLoader(dataset)
@@ -31,8 +31,8 @@ batch_size = 100
 weight_decay = 1e-5
 
 # Define deep learning model
-#model = MLP(input_dim, output_dim, num_neurons_list, use_bias, 'relu')
-model = CNN2D(input_dim, output_dim, num_neurons_list, use_bias, 'relu', True)
+model = MLP(input_dim, output_dim, num_neurons_list, use_bias, 'relu')
+#model = CNN2D(input_dim, output_dim, num_neurons_list, use_bias, 'relu', True)
 #model.set_coefficients_to_random()
 
 # Set up optimizer
@@ -40,7 +40,7 @@ optimizer = FixedPointIteration(dataloader, learning_rate, weight_decay)
 
 # Import neural network in optimizer
 optimizer.import_model(model)
-optimizer.set_loss_function('ce')
+optimizer.set_loss_function('mse')
 optimizer.set_optimizer('adam')
 
 training_loss_history = optimizer.train(max_iterations, threshold, batch_size)
