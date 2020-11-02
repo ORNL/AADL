@@ -9,7 +9,8 @@ import math
 
 # Abstract class that provides basic guidelines to implement an acceleration
 class Optimizer(object, metaclass=ABCMeta):
-    def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, learning_rate: float, weight_decay: float = 0.0):
+    def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, learning_rate: float,
+                 weight_decay: float = 0.0):
         """
 
         :type data_loader: torch.utils.data.dataloader.DataLoader
@@ -61,7 +62,7 @@ class Optimizer(object, metaclass=ABCMeta):
 
     @abstractmethod
     def train(self, input_data: torch.Tensor, target: torch.Tensor, num_iterations: int, threshold: float,
-                          batch_size: int):
+              batch_size: int):
         pass
 
     def set_loss_function(self, criterion_string):
@@ -87,10 +88,12 @@ class Optimizer(object, metaclass=ABCMeta):
         assert self.model_imported
 
         if optimizer_string.lower() == 'sgd':
-            self.optimizer = torch.optim.SGD(self.model.get_model().parameters(), lr=self.lr, weight_decay=self.weight_decay)
+            self.optimizer = torch.optim.SGD(self.model.get_model().parameters(), lr=self.lr,
+                                             weight_decay=self.weight_decay)
             self.optimizer_specified = True
         elif optimizer_string.lower() == 'adam':
-            self.optimizer = torch.optim.Adam(self.model.get_model().parameters(), lr=0.001, betas=(0.9, 0.999), weight_decay=self.weight_decay)
+            self.optimizer = torch.optim.Adam(self.model.get_model().parameters(), lr=0.001, betas=(0.9, 0.999),
+                                              weight_decay=self.weight_decay)
             self.optimizer_specified = True
         else:
             raise ValueError("Optimizer is not recognized: currently only SGD and Adam are allowed")
@@ -101,7 +104,8 @@ class Optimizer(object, metaclass=ABCMeta):
 
 
 class FixedPointIteration(Optimizer, ABC):
-    def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, learning_rate: float, weight_decay: float = 0.0):
+    def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, learning_rate: float,
+                 weight_decay: float = 0.0):
         """
 
         :param learning_rate: :type: float
@@ -119,23 +123,11 @@ class FixedPointIteration(Optimizer, ABC):
 
         while epoch_counter < num_epochs:
 
-            """
-            permutation = torch.randperm(input_data.size()[0])
-            for i in range(0, input_data.shape[0], batch_size):
-                indices = permutation[i:i + batch_size]
-                batch_x, batch_y = input_data[indices], target[indices]
-                self.optimizer.zero_grad()  # zero the gradient buffers
-                output = self.model.forward(batch_x)
-                loss = self.criterion(output, batch_y)
-                loss.backward()
-                self.optimizer.step()  # Does the update
-            """
-
             for batch_idx, (data, target) in enumerate(self.data_loader):
                 data, target = data.to(self.model.get_device()), target.to(self.model.get_device())
                 self.optimizer.zero_grad()
                 output = self.model.forward(data)
-                #print("Input_data: "+str(data.shape)+' - Output: '+str(output.shape)+' - Target: '+str(target.shape))
+                # print("Input_data: "+str(data.shape)+' - Output: '+str(output.shape)+' - Target: '+str(target.shape)+' - '+' - Value:'+str(output))
                 loss = self.criterion(output, target)
                 loss.backward()
                 self.optimizer.step()
