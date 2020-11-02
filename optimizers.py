@@ -9,13 +9,17 @@ import math
 
 # Abstract class that provides basic guidelines to implement an acceleration
 class Optimizer(object, metaclass=ABCMeta):
-    def __init__(self, learning_rate: float, weight_decay: float = 0.0):
+    def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, learning_rate: float, weight_decay: float = 0.0):
         """
 
+        :type data_loader: torch.utils.data.dataloader.DataLoader
         :type learning_rate: float
         :type weight_decay: float
         """
         self.iteration_counter = 0
+
+        assert isinstance(data_loader, torch.utils.data.dataloader.DataLoader)
+        self.data_loader = data_loader
 
         assert isinstance(learning_rate, float)
         self.lr = learning_rate
@@ -97,41 +101,47 @@ class Optimizer(object, metaclass=ABCMeta):
 
 
 class FixedPointIteration(Optimizer, ABC):
-    def __init__(self, learning_rate: float, weight_decay: float = 0.0):
+    def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, learning_rate: float, weight_decay: float = 0.0):
         """
 
         :param learning_rate: :type: float
         :param weight_decay: :type: float
         """
-        super(FixedPointIteration, self).__init__(learning_rate, weight_decay)
+        super(FixedPointIteration, self).__init__(data_loader, learning_rate, weight_decay)
 
-    def train(self, input_data, target, num_epochs, threshold, batch_size):
+    def train(self, num_epochs, threshold, batch_size):
+
+        self.model.get_model().train(mode=True)
+
         assert self.optimizer_specified
-        assert batch_size < input_data.shape[0]
-
-        # Define the objective function to optimize during the training of the neural network
-        output = self.model.forward(input_data)
-       
-        loss   = self.criterion(output, target)
 
         epoch_counter = 0
 
-        while (loss.item() > threshold) & (epoch_counter < num_epochs):
+        while epoch_counter < num_epochs:
 
+            """
             permutation = torch.randperm(input_data.size()[0])
-
-            print("###############################")
-            print('Epoch: ' + str(epoch_counter) + ' - Loss function: ' + str(loss.item()))
-
             for i in range(0, input_data.shape[0], batch_size):
                 indices = permutation[i:i + batch_size]
                 batch_x, batch_y = input_data[indices], target[indices]
                 self.optimizer.zero_grad()  # zero the gradient buffers
                 output = self.model.forward(batch_x)
-                self.model.get_model().train(mode=True)
                 loss = self.criterion(output, batch_y)
                 loss.backward()
                 self.optimizer.step()  # Does the update
+            """
+
+            for batch_idx, (data, target) in enumerate(self.data_loader):
+                data, target = data.to(self.model.get_device()), target.to(self.model.get_device())
+                self.optimizer.zero_grad()
+                output = self.model.forward(data)
+                print("Input_data: "+str(data.shape)+' - Output: '+str(output.shape)+' - Target: '+str(target.shape))
+                loss = self.criterion(output, target)
+                loss.backward()
+                self.optimizer.step()
+
+            print("###############################")
+            print('Epoch: ' + str(epoch_counter) + ' - Loss function: ' + str(loss.item()))
 
             epoch_counter = epoch_counter + 1
             self.training_loss_history.append(loss)

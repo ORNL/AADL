@@ -20,7 +20,7 @@ def activation_function(name_activation):
 class NeuralNetwork(torch.nn.Module, metaclass=ABCMeta):
 
     def __init__(self, input_dim: int, output_dim: int, num_neurons_list: list, use_bias: bool, activation: str,
-                 classification: bool):
+                 classification: bool, device='cpu'):
         """
 
         :param input_dim: :type int
@@ -32,7 +32,7 @@ class NeuralNetwork(torch.nn.Module, metaclass=ABCMeta):
         """
         super().__init__()
 
-        self.device = torch.device('cpu')
+        self.device = torch.device(device)
 
         assert isinstance(input_dim, int) or isinstance(input_dim, tuple)
         self.input_dim = input_dim
@@ -64,12 +64,17 @@ class NeuralNetwork(torch.nn.Module, metaclass=ABCMeta):
         """
         x = input_data
         y = self.model(x.float())
+        y = torch.squeeze(y, 1)
 
         return y
 
     # getter method for model
     def get_model(self):
         return self.model
+
+    # getter method for device
+    def get_device(self):
+        return self.device
 
     # extract list of layers
     def extract_layers_in_list(self):
@@ -113,7 +118,7 @@ class NeuralNetwork(torch.nn.Module, metaclass=ABCMeta):
 class MLP(NeuralNetwork, ABC):
 
     def __init__(self, input_dim: int, output_dim: int, num_neurons_list: list, use_bias: bool, activation: str,
-                 classification=False):
+                 classification=False, device='cpu'):
         """
 
         :param input_dim: :type int
@@ -121,7 +126,7 @@ class MLP(NeuralNetwork, ABC):
         :param num_neurons_list: :type list
         :param use_bias: :type bool
         """
-        super(MLP, self).__init__(input_dim, output_dim, num_neurons_list, use_bias, activation, classification)
+        super(MLP, self).__init__(input_dim, output_dim, num_neurons_list, use_bias, activation, classification, device)
 
         # Input layer
         self.layers += [torch.nn.Linear(self.input_dim, self.num_neurons_list[0], bias=self.use_bias)]
@@ -147,7 +152,7 @@ class MLP(NeuralNetwork, ABC):
 class CNN2D(NeuralNetwork, ABC):
 
     def __init__(self, input_dim: int, output_dim: int, num_neurons_list: list, use_bias: bool, activation: str,
-                 classification=False, **kwargs):
+                 classification=False, device='cpu', **kwargs):
         """
 
         :param input_dim: :type int
@@ -155,7 +160,7 @@ class CNN2D(NeuralNetwork, ABC):
         :param num_neurons_list: :type list
         :param use_bias: :type bool
         """
-        super(CNN2D, self).__init__(input_dim, output_dim, num_neurons_list, use_bias, activation, classification,
+        super(CNN2D, self).__init__(input_dim, output_dim, num_neurons_list, use_bias, activation, classification, device,
                                     **kwargs)
 
         self.kernel_size_list = kwargs.get("kernel_size_list", None)
