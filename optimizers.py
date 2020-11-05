@@ -8,15 +8,19 @@ import math
 
 
 # Abstract class that provides basic guidelines to implement an acceleration
-class Acceleration(object, metaclass=ABCMeta):
-    def __init__(self, window_depth: int, frequency: int, learning_rate: float, weight_decay: float):
+class Optimizer(object, metaclass=ABCMeta):
+    def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, learning_rate: float,
+                 weight_decay: float = 0.0):
         """
 
-        :type window_depth: int
-        :type frequency: int
+        :type data_loader: torch.utils.data.dataloader.DataLoader
         :type learning_rate: float
+        :type weight_decay: float
         """
         self.iteration_counter = 0
+
+        assert isinstance(data_loader, torch.utils.data.dataloader.DataLoader)
+        self.data_loader = data_loader
 
         assert isinstance(learning_rate, float)
         self.lr = learning_rate
@@ -24,11 +28,14 @@ class Acceleration(object, metaclass=ABCMeta):
         assert isinstance(weight_decay, float)
         self.weight_decay = weight_decay
 
+        """ 
+        # THIS IS KEPT HERE JUST FOR A REMINDER TO ADD EXTRA PARAMETERS IN THE ANDERSON CHILD CLASS
         assert isinstance(window_depth, int)
         self.window_depth = window_depth
 
         assert isinstance(frequency, int)
         self.freq = frequency
+        """
 
         self.model_imported = False
         self.model = None
@@ -54,8 +61,8 @@ class Acceleration(object, metaclass=ABCMeta):
         return self.model
 
     @abstractmethod
-    def accelerated_train(self, input_data: torch.Tensor, target: torch.Tensor, num_iterations: int, threshold: float,
-                          batch_size: int):
+    def train(self, input_data: torch.Tensor, target: torch.Tensor, num_iterations: int, threshold: float,
+              batch_size: int):
         pass
 
     def set_loss_function(self, criterion_string):
@@ -63,11 +70,12 @@ class Acceleration(object, metaclass=ABCMeta):
         if criterion_string.lower() == 'mse':
             self.criterion = torch.nn.MSELoss()
             self.criterion_specified = True
-        elif criterion_string.lower() == 'bce':
-            self.criterion = torch.nn.BCELoss()
+        elif criterion_string.lower() == 'ce':
+            self.criterion = torch.nn.CrossEntropyLoss()
             self.criterion_specified = True
         else:
-            raise ValueError("Loss function is not recognized: currently only MSE and BCE are allowed")
+            raise ValueError("Loss function is not recognized: currently only MSE and CE are allowed")
+        self.loss_name = criterion_string
 
     @property
     def is_loss_function_set(self):
@@ -80,10 +88,12 @@ class Acceleration(object, metaclass=ABCMeta):
         assert self.model_imported
 
         if optimizer_string.lower() == 'sgd':
-            self.optimizer = torch.optim.SGD(self.model.get_model().parameters(), lr=self.lr, weight_decay=self.weight_decay)
+            self.optimizer = torch.optim.SGD(self.model.get_model().parameters(), lr=self.lr,
+                                             weight_decay=self.weight_decay)
             self.optimizer_specified = True
         elif optimizer_string.lower() == 'adam':
-            self.optimizer = torch.optim.Adam(self.model.get_model().parameters(), lr=0.001, betas=(0.9, 0.999), weight_decay=self.weight_decay)
+            self.optimizer = torch.optim.Adam(self.model.get_model().parameters(), lr=0.001, betas=(0.9, 0.999),
+                                              weight_decay=self.weight_decay)
             self.optimizer_specified = True
         else:
             raise ValueError("Optimizer is not recognized: currently only SGD and Adam are allowed")
@@ -93,41 +103,37 @@ class Acceleration(object, metaclass=ABCMeta):
         return self.optimizer_specified
 
 
-class Anderson(Acceleration, ABC):
-    def __init__(self, window_depth: int, frequency: int, learning_rate: float, weight_decay: float):
+class FixedPointIteration(Optimizer, ABC):
+    def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, learning_rate: float,
+                 weight_decay: float = 0.0):
         """
 
-        :type window_depth: int
-        :type frequency: int
-        :type learning_rate: float
+        :param learning_rate: :type: float
+        :param weight_decay: :type: float
         """
-        super(Anderson, self).__init__(window_depth, frequency, learning_rate, weight_decay)
+        super(FixedPointIteration, self).__init__(data_loader, learning_rate, weight_decay)
 
-    def accelerated_train(self, input_data, target, num_epochs, threshold, batch_size):
+    def train(self, num_epochs, threshold, batch_size):
+
+        self.model.get_model().train(mode=True)
+
         assert self.optimizer_specified
-        assert batch_size < input_data.shape[0]
-
-        # Define the objective function to optimize during the training of the neural network
-        output = self.model.get_model()(input_data)
-        loss   = self.criterion(output, target)
 
         epoch_counter = 0
 
-        permutation = torch.randperm(input_data.size()[0])
+        while epoch_counter < num_epochs:
 
-        while (loss.item() > threshold) & (epoch_counter < num_epochs):
+            for batch_idx, (data, target) in enumerate(self.data_loader):
+                data, target = data.to(self.model.get_device()), target.to(self.model.get_device())
+                self.optimizer.zero_grad()
+                output = self.model.forward(data)
+                # print("Input_data: "+str(data.shape)+' - Output: '+str(output.shape)+' - Target: '+str(target.shape)+' - '+' - Value:'+str(output))
+                loss = self.criterion(output, target)
+                loss.backward()
+                self.optimizer.step()
 
             print("###############################")
             print('Epoch: ' + str(epoch_counter) + ' - Loss function: ' + str(loss.item()))
-
-            for i in range(0, input_data.shape[0], batch_size):
-                indices = permutation[i:i + batch_size]
-                batch_x, batch_y = input_data[indices], target[indices]
-                self.optimizer.zero_grad()  # zero the gradient buffers
-                output = self.model.get_model()(batch_x)
-                loss = self.criterion(output, batch_y)
-                loss.backward()
-                self.optimizer.step()  # Does the update
 
             epoch_counter = epoch_counter + 1
             self.training_loss_history.append(loss)
