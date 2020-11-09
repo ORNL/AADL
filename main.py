@@ -1,10 +1,11 @@
-from NN_models import *
-from optimizers import *
 import matplotlib.pyplot as plt
 import sys
 
 sys.path.append("./utils")
-from dataloaders import *
+sys.path.append("./modules")
+from modules.NN_models import *
+from modules.optimizers import *
+from utils.dataloaders import *
 
 plt.rcParams.update({'font.size': 16})
 
@@ -37,7 +38,8 @@ model = CNN2D(input_dim, output_dim, num_neurons_list, use_bias, 'relu', True)
 #model.set_coefficients_to_random()
 
 # Set up optimizer
-optimizer = FixedPointIteration(dataloader, learning_rate, weight_decay)
+#optimizer = FixedPointIteration(dataloader, learning_rate, weight_decay)
+optimizer = RNA_Acceleration(dataloader, learning_rate, weight_decay)
 
 # Import neural network in optimizer
 optimizer.import_model(model)
