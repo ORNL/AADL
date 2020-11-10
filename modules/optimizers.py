@@ -144,18 +144,22 @@ class FixedPointIteration(Optimizer, ABC):
 
 class RNA_Acceleration(Optimizer, ABC):
     def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, learning_rate: float,
-                 weight_decay: float = 0.0, window_depth: int = 15, reg_acc: float = 1e-5, store_each: int = 1):
+                 weight_decay: float = 0.0, wait_iterations: int = 1, window_depth: int = 15, frequency: int = 1, reg_acc: float = 0.0, store_each: int = 1):
         """
 
         :param learning_rate: :type: float
         :param weight_decay: :type: float
         """
         super(RNA_Acceleration, self).__init__(data_loader, learning_rate, weight_decay)
+        self.wait_iterations = wait_iterations
         self.store_each = store_each
         self.window_depth = window_depth
+        self.frequency = frequency
         self.reg_acc = reg_acc
 
     def train(self, num_epochs, threshold, batch_size):
+
+        assert self.model_imported
 
         # Initialization of acceleration module
         self.acc_mod = AccelerationModule(self.model.get_model(), self.window_depth, self.reg_acc)
@@ -180,7 +184,8 @@ class RNA_Acceleration(Optimizer, ABC):
 
             # Acceleration
             self.acc_mod.store(self.model.get_model())
-            self.acc_mod.accelerate(self.model.get_model())
+            if (epoch_counter > self.wait_iterations) and (epoch_counter % self.frequency == 0):
+                self.acc_mod.accelerate(self.model.get_model())
 
             epoch_counter = epoch_counter + 1
             self.training_loss_history.append(loss)

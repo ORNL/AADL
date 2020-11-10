@@ -1,5 +1,7 @@
-import matplotlib.pyplot as plt
 import sys
+from copy import deepcopy
+
+import matplotlib.pyplot as plt
 
 sys.path.append("./utils")
 sys.path.append("./modules")
@@ -20,36 +22,52 @@ print("Finished importing data")
 num_neurons_list = [10, 10]
 use_bias = True
 
-# Parameters for optimizer
-window_depth = 10
-frequency = 5
-max_iterations = 5000
+# Parameters for generic optimizer
+max_iterations = 50
 learning_rate = 1e-2
 threshold = 1e-7
-batch_size = 100
-weight_decay = 1e-5
+batch_size = 50
+weight_decay = 0.0
+
+# Parameters for RNA
+wait_iterations = 50
+window_depth = 10
+frequency = 5
+store_each = 1
+reg_acc = 0.0
 
 # Generate dataloader
 dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
 # Define deep learning model
-#model = MLP(input_dim, output_dim, num_neurons_list, use_bias, 'relu')
-model = CNN2D(input_dim, output_dim, num_neurons_list, use_bias, 'relu', True)
-#model.set_coefficients_to_random()
+#model_fixedpoint = MLP(input_dim, output_dim, num_neurons_list, use_bias, 'relu')
+model_fixedpoint = CNN2D(input_dim, output_dim, num_neurons_list, use_bias, 'relu', True)
+#model_fixedpoint.set_coefficients_to_random()
+
+model_acceleration = deepcopy(model_fixedpoint)
 
 # Set up optimizer
-#optimizer = FixedPointIteration(dataloader, learning_rate, weight_decay)
-optimizer = RNA_Acceleration(dataloader, learning_rate, weight_decay)
+optimizer1 = FixedPointIteration(dataloader, learning_rate, weight_decay)
 
 # Import neural network in optimizer
-optimizer.import_model(model)
-optimizer.set_loss_function('ce')
-optimizer.set_optimizer('adam')
+optimizer1.import_model(model_fixedpoint)
+optimizer1.set_loss_function('ce')
+optimizer1.set_optimizer('adam')
+training1_loss_history = optimizer1.train(max_iterations, threshold, batch_size)
 
-training_loss_history = optimizer.train(max_iterations, threshold, batch_size)
+# Set up optimizer
+optimizer2 = RNA_Acceleration(dataloader, learning_rate, weight_decay, wait_iterations, window_depth, frequency, reg_acc, store_each)
 
-epochs = range(1, len(training_loss_history) + 1)
-plt.plot(epochs, training_loss_history, 'b', label='training loss')
+# Import neural network in optimizer
+optimizer2.import_model(model_acceleration)
+optimizer2.set_loss_function('ce')
+optimizer2.set_optimizer('adam')
+training2_loss_history = optimizer2.train(max_iterations, threshold, batch_size)
+
+epochs1 = range(1, len(training1_loss_history) + 1)
+epochs2 = range(1, len(training2_loss_history) + 1)
+plt.plot(epochs1, training1_loss_history, label='training loss - Fixed Point')
+plt.plot(epochs2, training2_loss_history, label='training loss - RNA')
 plt.yscale('log')
 plt.title('Training accuracy')
 plt.xlabel('Epochs')

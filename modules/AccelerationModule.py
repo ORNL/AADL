@@ -78,7 +78,7 @@ class AccelerationModule(object):
         min_eig = RNA.min_eignevalRR(x_hist_np)
         return min_eig
 
-    def accelerate(self, model, step_size: int = 1):
+    def accelerate(self, model, step_size: float = 1):
 
         if len(self.x_hist) < 3:  # Cannot accelerate when number of points is below 3
             self.load_param_in_model(np.array(self.x_hist[-1]), model)
