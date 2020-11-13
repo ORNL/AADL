@@ -1,4 +1,4 @@
-from GraduateAdmission import *
+from utils.GraduateAdmission import GraduateAdmission
 from torchvision import transforms, datasets
 import os
 

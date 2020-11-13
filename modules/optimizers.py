@@ -5,7 +5,7 @@ from torch import Tensor
 from torch import autograd
 from abc import ABCMeta, abstractmethod, ABC
 import math
-from modules.AccelerationModule import *
+from modules.AccelerationModule import AccelerationModule
 
 
 # Abstract class that provides basic guidelines to implement an acceleration

@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 
 sys.path.append("./utils")
 sys.path.append("./modules")
-from modules.NN_models import *
-from modules.optimizers import *
-from utils.dataloaders import *
+from modules.NN_models import MLP, CNN2D
+from modules.optimizers import FixedPointIteration, RNA_Acceleration
+from utils.dataloaders import graduate_admission_data, mnist_data, cifar10_data
 
 plt.rcParams.update({'font.size': 16})
 
