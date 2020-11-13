@@ -116,7 +116,7 @@ class FixedPointIteration(Optimizer, ABC):
 
     def train(self, num_epochs, threshold, batch_size):
 
-        self.model.get_model().train(mode=True)
+        self.model.get_model().train(True)
 
         assert self.optimizer_specified
 
@@ -165,7 +165,7 @@ class RNA_Acceleration(Optimizer, ABC):
         self.acc_mod = AccelerationModule(self.model.get_model(), self.window_depth, self.reg_acc)
         self.acc_mod.store(self.model.get_model())
 
-        self.model.get_model().train(mode=True)
+        self.model.get_model().train(True)
         assert self.optimizer_specified
         epoch_counter = 0
 

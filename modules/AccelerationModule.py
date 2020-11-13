@@ -3,7 +3,7 @@ import numpy as np
 import sys
 
 sys.path.append("./utils")
-import rna_acceleration as RNA
+import rna_acceleration as rna
 
 
 class AccelerationModule(object):
@@ -61,22 +61,21 @@ class AccelerationModule(object):
 
         key = 0
         for param in model.parameters():
-            (shape, nElem) = self.input_shape[key]
-            last_idx = first_idx + nElem
-            if x0 is None:
-                newEntry = x[first_idx:last_idx].reshape(shape)
-            else:
-                newEntry = (1 - step_size) * x0[first_idx:last_idx].reshape(shape) + step_size * x[
-                                                                                                 first_idx:last_idx].reshape(
+            (shape, num_elem) = self.input_shape[key]
+            last_idx = first_idx + num_elem
+            param.data = torch.FloatTensor(
+                x[first_idx:last_idx].reshape(shape)
+                if x0 is None else
+                (1 - step_size) * x0[first_idx:last_idx].reshape(shape) + step_size * x[first_idx:last_idx].reshape(
                     shape)
-            param.data = torch.FloatTensor(newEntry)
+            )
+
             first_idx = last_idx
             key += 1
 
     def min_eigenval(self):
         x_hist_np = np.array(self.x_hist).transpose()
-        min_eig = RNA.min_eignevalRR(x_hist_np)
-        return min_eig
+        return rna.min_eignevalRR(x_hist_np)
 
     def accelerate(self, model, step_size: float = 1):
 
@@ -85,7 +84,7 @@ class AccelerationModule(object):
             return 1
 
         x_hist_np = np.array(self.x_hist).transpose()
-        x_acc, c = RNA.rna(x_hist_np, self.reg_acc)
+        x_acc, c = rna.rna(x_hist_np, self.reg_acc)
 
         if step_size == 1.0:
             self.load_param_in_model(x_acc, model)
