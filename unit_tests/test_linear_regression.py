@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import sys
 import numpy
 import torch
@@ -384,3 +385,4 @@ class TestRegression(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
