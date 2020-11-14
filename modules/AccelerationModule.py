@@ -7,16 +7,14 @@ import rna_acceleration as rna
 
 
 class AccelerationModule(object):
-
-    # Variables
-    # x_hist (list)
-    # window_depth (integer)
-    # reg_acc (double)
-    # cont_type (string)
-    # input_shape (dictionnary)
-
     def __init__(self, model: torch.nn.Module, window_depth: int = 15, reg_acc: float = 1e-5, store_each: int = 1):
+        """
 
+        :param model: :type torch.nn.Module
+        :param window_depth: :type int
+        :param reg_acc: :type float
+        :param store_each: :type int
+        """
         self.store_counter = 0
 
         self.x_hist = []
