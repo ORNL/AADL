@@ -1,4 +1,4 @@
-from GraduateAdmission import *
+from utils.GraduateAdmission import GraduateAdmission
 from torchvision import transforms, datasets
 import os
 
@@ -28,7 +28,7 @@ def mnist_data(rand_rotation=False, max_degree=90):
                 transforms.Normalize((0.5,), (0.5,)),
             ]
         )
-    out_dir = '{}/dataset'.format(os.getcwd())
+    out_dir = '{}/datasets'.format(os.getcwd())
     input_dim = (1, 28, 28)
     output_dim = int(10)
     return input_dim, output_dim, datasets.MNIST(
@@ -44,7 +44,7 @@ def cifar10_data():
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
         ]
     )
-    out_dir = '{}/dataset'.format(os.getcwd())
+    out_dir = '{}/datasets'.format(os.getcwd())
     input_dim = (3, 32, 32)
     output_dim = int(10)
     return input_dim, output_dim, datasets.CIFAR10(
@@ -60,7 +60,7 @@ def cifar100_data():
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
         ]
     )
-    out_dir = '{}/dataset'.format(os.getcwd())
+    out_dir = '{}/datasets'.format(os.getcwd())
     input_dim = (3, 32, 32)
     output_dim = 1       
     return input_dim, output_dim, datasets.CIFAR100(
