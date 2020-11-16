@@ -89,7 +89,7 @@ def rna_precomputed(X, RR, reg=0):
     c = np.asmatrix(z / np.sum(z)).T
 
     # Compute the extrapolation / weigthed mean  "sum_i c_i x_i", and return
-    extr = np.matmul(X[:, 1:k + 1], c[:, 0])
+    extr = np.dot(X[:, 1:k + 1], c[:, 0])
     return np.array(extr), c
 
 

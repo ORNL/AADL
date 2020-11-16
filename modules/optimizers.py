@@ -116,7 +116,7 @@ class FixedPointIteration(Optimizer, ABC):
 
     def train(self, num_epochs, threshold, batch_size):
 
-        self.model.get_model().train(True)
+        self.model.get_model().train(True) # True indicates actual training
 
         assert self.optimizer_specified
 

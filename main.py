@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-@authors: Massimiliano Lupo Pasini (e-mail: lupopasinim.gov)
-        : Miroslav Stoyanov (e-mail: stoyanovmk.gov)
-        : Viktor Reshniak (e-mail: reshniakv.gov)
+@authors: Massimiliano Lupo Pasini (e-mail: lupopasinim@ornl.gov.gov)
+        : Miroslav Stoyanov (e-mail: stoyanovmk@ornl.gov.gov)
+        : Viktor Reshniak (e-mail: reshniakv@ornl.gov.gov)
 
 Usage:
   main.py (-h | --help)
