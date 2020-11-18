@@ -46,6 +46,7 @@ class Optimizer(object, metaclass=ABCMeta):
         self.criterion = None
         self.optimizer_specified = False
         self.optimizer = None
+        self.loss_name = None
 
     def set_zero_grad(self):
         assert self.model_imported
