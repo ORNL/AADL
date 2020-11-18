@@ -1,8 +1,8 @@
-<<<<<<< HEAD
 import sys
 import numpy
 import torch
 from torch.utils.data import Dataset
+
 import unittest
 
 sys.path.append('../modules')
