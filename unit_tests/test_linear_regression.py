@@ -346,6 +346,118 @@ def test_neural_network_linear_regression_adam_anderson(num_points):
 
     return training_classic_loss_history
 
+def test_neural_network_linear_regression_sgd(num_points):
+    inputDim, outputDim, dataset = linear_data(num_points)
+    num_neurons_list = [1]
+    use_bias = True
+    classification_problem = False
+    activation = None
+    weight_decay = 0.0
+    learning_rate = 1e-2
+    batch_size = 1
+    epochs = 10000
+    threshold = 1e-8
+
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size)
+
+    model = MLP(inputDim, outputDim, num_neurons_list, use_bias, activation, classification_problem)
+
+    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay,)
+    optimizer_classic.import_model(model)
+    optimizer_classic.set_loss_function('mse')
+    optimizer_classic.set_optimizer('sgd')
+    training_classic_loss_history = optimizer_classic.train(epochs, threshold, batch_size)
+
+    return training_classic_loss_history
+
+def test_neural_network_linear_regression_adam(num_points):
+    inputDim, outputDim, dataset = linear_data(num_points)
+    num_neurons_list = [1]
+    use_bias = True
+    classification_problem = False
+    activation = None
+    weight_decay = 0.0
+    learning_rate = 1e-2
+    batch_size = 1
+    epochs = 10000
+    threshold = 1e-8
+
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size)
+
+    model = MLP(inputDim, outputDim, num_neurons_list, use_bias, activation, classification_problem)
+
+    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay)
+    optimizer_classic.import_model(model)
+    optimizer_classic.set_loss_function('mse')
+    optimizer_classic.set_optimizer('adam')
+    training_classic_loss_history = optimizer_classic.train(epochs, threshold, batch_size)
+
+    return training_classic_loss_history
+
+def test_neural_network_linear_regression_sgd_anderson(num_points):
+    inputDim, outputDim, dataset = linear_data(num_points)
+    num_neurons_list = [1]
+    use_bias = True
+    classification_problem = False
+    activation = None
+    weight_decay = 0.0
+    learning_rate = 1e-2
+    batch_size = 1
+    epochs = 10000
+    threshold = 1e-8
+    wait_iterations = 1
+    window_depth = 1
+    frequency = 1
+    reg_acc = 0.0
+    store_each = 1    
+
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size)
+
+    model = MLP(inputDim, outputDim, num_neurons_list, use_bias, activation, classification_problem)
+
+    optimizer_anderson = RNA_Acceleration(dataloader, learning_rate, weight_decay, wait_iterations, window_depth,
+                                          frequency,
+                                          reg_acc, store_each)
+    optimizer_anderson.import_model(model)
+    optimizer_anderson.set_loss_function('mse')
+    optimizer_anderson.set_optimizer('sgd')
+    training_classic_loss_history = optimizer_anderson.train(epochs, threshold, batch_size)
+
+    return training_classic_loss_history
+
+
+def test_neural_network_linear_regression_adam_anderson(num_points):
+    inputDim, outputDim, dataset = linear_data(num_points)
+    num_neurons_list = [1]
+    use_bias = True
+    classification_problem = False
+    activation = None
+    weight_decay = 0.0
+    learning_rate = 1e-2
+    batch_size = 1
+    epochs = 10000
+    threshold = 1e-8
+    wait_iterations = 1
+    window_depth = 1
+    frequency = 1
+    reg_acc = 0.0
+    store_each = 1    
+
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size)
+
+    model = MLP(inputDim, outputDim, num_neurons_list, use_bias, activation, classification_problem)
+
+    optimizer_anderson = RNA_Acceleration(dataloader, learning_rate, weight_decay, wait_iterations, window_depth,
+                                          frequency,
+                                          reg_acc, store_each)
+    optimizer_anderson.import_model(model)
+    optimizer_anderson.set_loss_function('mse')
+    optimizer_anderson.set_optimizer('adam')
+    training_classic_loss_history = optimizer_anderson.train(epochs, threshold, batch_size)
+
+    return training_classic_loss_history
+
+
 
 class TestRegression(unittest.TestCase):
     def test_sgd(self):
