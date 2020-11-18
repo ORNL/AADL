@@ -22,9 +22,9 @@ def linear_regression(n: int = 10):
     return x_train, y_train
 
 
-def monotonic(x):
+def monotonic_decreasing(x):
     dx = numpy.diff(x)
-    return numpy.all(dx <= 0) or numpy.all(dx >= 0)
+    return numpy.all(dx < 0)
 
 
 class LinearData(Dataset):
@@ -93,13 +93,13 @@ def test_linear_regression_sgd(num_points):
     learning_rate = 1e-2
     weight_decay = 0.0    
     batch_size = 1
-    epochs = 10000
+    epochs = 1000
     threshold = 1e-8
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
     model = LinearRegression(input_dim, output_dim, use_bias)
-    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay, True)
+    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay)
     optimizer_classic.import_model(model)
     optimizer_classic.set_loss_function('mse')
     optimizer_classic.set_optimizer('sgd')
@@ -113,14 +113,14 @@ def test_linear_regression_adam(num_points):
     use_bias = True
     learning_rate = 1e-2
     weight_decay = 0.0    
-    batch_size = num_points
-    epochs = 10000
+    batch_size = 1
+    epochs = 1000
     threshold = 1e-8
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
     model = LinearRegression(input_dim, output_dim, use_bias)
-    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay, True)
+    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay)
     optimizer_classic.import_model(model)
     optimizer_classic.set_loss_function('mse')
     optimizer_classic.set_optimizer('adam')
@@ -135,10 +135,10 @@ def test_linear_regression_sgd_anderson(num_points):
     learning_rate = 1e-2
     weight_decay = 0.0    
     batch_size = 1
-    epochs = 10000
+    epochs = 1000
     threshold = 1e-8
     wait_iterations = 1
-    window_depth = num_points
+    window_depth = epochs
     frequency = 1
     reg_acc = 0.0
     store_each = 1
@@ -148,7 +148,7 @@ def test_linear_regression_sgd_anderson(num_points):
     model = LinearRegression(input_dim, output_dim, use_bias)
     optimizer_anderson = RNA_Acceleration(dataloader, learning_rate, weight_decay, wait_iterations, window_depth,
                                           frequency,
-                                          reg_acc, store_each, True)
+                                          reg_acc, store_each)
     optimizer_anderson.import_model(model)
     optimizer_anderson.set_loss_function('mse')
     optimizer_anderson.set_optimizer('sgd')
@@ -162,11 +162,11 @@ def test_linear_regression_adam_anderson(num_points):
     use_bias = True
     learning_rate = 1e-2
     weight_decay = 0.0    
-    batch_size = num_points
-    epochs = 10000
+    batch_size = 1
+    epochs = 1000
     threshold = 1e-8
     wait_iterations = 1
-    window_depth = 1
+    window_depth = epochs
     frequency = 1
     reg_acc = 0.0
     store_each = 1
@@ -176,7 +176,7 @@ def test_linear_regression_adam_anderson(num_points):
     model = LinearRegression(input_dim, output_dim, use_bias)
     optimizer_anderson = RNA_Acceleration(dataloader, learning_rate, weight_decay, wait_iterations, window_depth,
                                           frequency,
-                                          reg_acc, store_each, True)
+                                          reg_acc, store_each)
     optimizer_anderson.import_model(model)
     optimizer_anderson.set_loss_function('mse')
     optimizer_anderson.set_optimizer('adam')
@@ -194,14 +194,14 @@ def test_neural_network_linear_regression_sgd(num_points):
     weight_decay = 0.0
     learning_rate = 1e-2
     batch_size = 1
-    epochs = 10000
+    epochs = 1000
     threshold = 1e-8
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
     model = MLP(input_dim, output_dim, num_neurons_list, use_bias, activation, classification_problem)
 
-    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay, True)
+    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay)
     optimizer_classic.import_model(model)
     optimizer_classic.set_loss_function('mse')
     optimizer_classic.set_optimizer('sgd')
@@ -218,15 +218,15 @@ def test_neural_network_linear_regression_adam(num_points):
     activation = None
     weight_decay = 0.0
     learning_rate = 1e-2
-    batch_size = num_points
-    epochs = 10000
+    batch_size = 1
+    epochs = 1000
     threshold = 1e-8
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
     model = MLP(input_dim, output_dim, num_neurons_list, use_bias, activation, classification_problem)
 
-    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay, True)
+    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay,)
     optimizer_classic.import_model(model)
     optimizer_classic.set_loss_function('mse')
     optimizer_classic.set_optimizer('adam')
@@ -243,11 +243,11 @@ def test_neural_network_linear_regression_sgd_anderson(num_points):
     activation = None
     weight_decay = 0.0
     learning_rate = 1e-2
-    batch_size = num_points
-    epochs = 10000
+    batch_size = 1
+    epochs = 1000
     threshold = 1e-8
     wait_iterations = 1
-    window_depth = 10
+    window_depth = epochs
     frequency = 1
     reg_acc = 0.0
     store_each = 1
@@ -275,11 +275,11 @@ def test_neural_network_linear_regression_adam_anderson(num_points):
     activation = None
     weight_decay = 0.0
     learning_rate = 1e-2
-    batch_size = num_points
-    epochs = 10000
+    batch_size = 1
+    epochs = 1000
     threshold = 1e-8
     wait_iterations = 1
-    window_depth = 1
+    window_depth = epochs
     frequency = 1
     reg_acc = 0.0
     store_each = 1
@@ -301,31 +301,29 @@ def test_neural_network_linear_regression_adam_anderson(num_points):
 
 class TestRegression(unittest.TestCase):
     def test_sgd(self):
-        self.assertTrue(monotonic(test_linear_regression_sgd(10000)))
+        self.assertTrue(monotonic_decreasing(test_linear_regression_sgd(10000)))
 
-    """
     def test_adam(self):
-        self.assertTrue(monotonic(test_linear_regression_adam(10000)))
-    """
+        self.assertTrue(monotonic_decreasing(test_linear_regression_adam(10000)))
 
     def test_sgd_anderson(self):
-        self.assertTrue(monotonic(test_linear_regression_sgd_anderson(10000)))
-    """
+        self.assertTrue(monotonic_decreasing(test_linear_regression_sgd_anderson(10000)))
 
     def test_adam_anderson(self):
-        self.assertTrue(monotonic(test_linear_regression_adam_anderson(10000)))
+        self.assertTrue(monotonic_decreasing(test_linear_regression_adam_anderson(10000)))
 
+    """
     def test_nn_sgd(self):
-        self.assertTrue(monotonic(test_neural_network_linear_regression_sgd(10000)))
+        self.assertTrue(monotonic_decreasing(test_neural_network_linear_regression_sgd(10000)))
 
     def test_nn_adam(self):
-        self.assertTrue(monotonic(test_neural_network_linear_regression_adam(10000)))
+        self.assertTrue(monotonic_decreasing(test_neural_network_linear_regression_adam(10000)))
 
     def test_nn_sgd_anderson(self):
-        self.assertTrue(monotonic(test_neural_network_linear_regression_sgd_anderson(10000)))
+        self.assertTrue(monotonic_decreasing(test_neural_network_linear_regression_sgd_anderson(10000)))
 
     def test_nn_adam_anderson(self):
-        self.assertTrue(monotonic(test_neural_network_linear_regression_adam_anderson(10000)))
+        self.assertTrue(monotonic_decreasing(test_neural_network_linear_regression_adam_anderson(10000)))
     """
         
 
