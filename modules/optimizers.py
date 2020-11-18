@@ -92,12 +92,16 @@ class Optimizer(object, metaclass=ABCMeta):
             self.optimizer = torch.optim.SGD(self.model.get_model().parameters(), lr=self.lr,
                                              weight_decay=self.weight_decay)
             self.optimizer_specified = True
+        elif optimizer_string.lower() == 'rmsprop':
+            self.optimizer = torch.optim.RMSprop(self.model.get_model().parameters(), lr=0.001, alpha=0.99,
+                                                 weight_decay=self.weight_decay)
+            self.optimizer_specified = True
         elif optimizer_string.lower() == 'adam':
             self.optimizer = torch.optim.Adam(self.model.get_model().parameters(), lr=0.001, betas=(0.9, 0.999),
                                               weight_decay=self.weight_decay)
             self.optimizer_specified = True
         else:
-            raise ValueError("Optimizer is not recognized: currently only SGD and Adam are allowed")
+            raise ValueError("Optimizer is not recognized: currently only SGD, RMSProp and Adam are allowed")
 
     @property
     def is_optimizer_set(self):
@@ -116,7 +120,7 @@ class FixedPointIteration(Optimizer, ABC):
 
     def train(self, num_epochs, threshold, batch_size):
 
-        self.model.get_model().train(True) # True indicates actual training
+        self.model.get_model().train(True)  # True indicates actual training
 
         assert self.optimizer_specified
 
@@ -144,7 +148,8 @@ class FixedPointIteration(Optimizer, ABC):
 
 class RNA_Acceleration(Optimizer, ABC):
     def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, learning_rate: float,
-                 weight_decay: float = 0.0, wait_iterations: int = 1, window_depth: int = 15, frequency: int = 1, reg_acc: float = 0.0, store_each: int = 1):
+                 weight_decay: float = 0.0, wait_iterations: int = 1, window_depth: int = 15, frequency: int = 1,
+                 reg_acc: float = 0.0, store_each: int = 1):
         """
 
         :param learning_rate: :type: float
