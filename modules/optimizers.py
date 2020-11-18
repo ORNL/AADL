@@ -118,7 +118,7 @@ class FixedPointIteration(Optimizer, ABC):
         :param learning_rate: :type: float
         :param weight_decay: :type: float
         """
-        super(FixedPointIteration, self).__init__(data_loader, learning_rate, weight_decay)
+        super(FixedPointIteration, self).__init__(data_loader, learning_rate, weight_decay, verbose)
 
     def train(self, num_epochs, threshold, batch_size):
 
@@ -158,7 +158,7 @@ class RNA_Acceleration(Optimizer, ABC):
         :param learning_rate: :type: float
         :param weight_decay: :type: float
         """
-        super(RNA_Acceleration, self).__init__(data_loader, learning_rate, weight_decay)
+        super(RNA_Acceleration, self).__init__(data_loader, learning_rate, weight_decay, verbose)
         self.wait_iterations = wait_iterations
         self.store_each = store_each
         self.window_depth = window_depth
