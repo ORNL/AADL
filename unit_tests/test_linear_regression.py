@@ -134,11 +134,11 @@ def test_linear_regression_sgd_anderson(num_points):
     use_bias = True
     learning_rate = 1e-2
     weight_decay = 0.0    
-    batch_size = num_points
+    batch_size = 1
     epochs = 10000
     threshold = 1e-8
     wait_iterations = 1
-    window_depth = 2
+    window_depth = num_points
     frequency = 1
     reg_acc = 0.0
     store_each = 1
@@ -193,7 +193,7 @@ def test_neural_network_linear_regression_sgd(num_points):
     activation = None
     weight_decay = 0.0
     learning_rate = 1e-2
-    batch_size = num_points
+    batch_size = 1
     epochs = 10000
     threshold = 1e-8
 
@@ -306,9 +306,11 @@ class TestRegression(unittest.TestCase):
     """
     def test_adam(self):
         self.assertTrue(monotonic(test_linear_regression_adam(10000)))
+    """
 
     def test_sgd_anderson(self):
         self.assertTrue(monotonic(test_linear_regression_sgd_anderson(10000)))
+    """
 
     def test_adam_anderson(self):
         self.assertTrue(monotonic(test_linear_regression_adam_anderson(10000)))
@@ -318,12 +320,10 @@ class TestRegression(unittest.TestCase):
 
     def test_nn_adam(self):
         self.assertTrue(monotonic(test_neural_network_linear_regression_adam(10000)))
-    """
 
     def test_nn_sgd_anderson(self):
         self.assertTrue(monotonic(test_neural_network_linear_regression_sgd_anderson(10000)))
 
-    """
     def test_nn_adam_anderson(self):
         self.assertTrue(monotonic(test_neural_network_linear_regression_adam_anderson(10000)))
     """
