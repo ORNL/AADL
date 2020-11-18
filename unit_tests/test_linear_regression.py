@@ -1,10 +1,211 @@
-from modules.NN_models import MLP
-from modules.optimizers import FixedPointIteration
+import sys
+import numpy
+import torch
+from torch.utils.data import Dataset
 
-def test_sum():
-    input_dim, output_dim, dataset = ...
-    assert sum([1, 2, 3]) == 6, "Should be 6"
+sys.path.append('../modules')
+from optimizers import FixedPointIteration, RNA_Acceleration
+
+import unittest
+
+
+def linear_regression(n: int = 10):
+    # create dummy data for training
+    x_values = [i for i in range(-n, n)]
+    x_train = numpy.array(x_values, dtype=numpy.float32)
+    x_train = x_train.reshape(-1, 1)
+
+    y_values = [2 * i + 1 for i in x_values]
+    y_train = numpy.array(y_values, dtype=numpy.float32)
+    y_train = y_train.reshape(-1, 1)
+
+    return x_train, y_train
+
+
+def monotonic(x):
+    dx = numpy.diff(x)
+    return numpy.all(dx <= 0) or numpy.all(dx >= 0)
+
+
+class LinearData(Dataset):
+    def __init__(self, csv_file=None, root_dir=None, transform=None, num_points: int = 10):
+        super(LinearData, self).__init__()
+        """
+        Args:
+            csv_file (string): Path to the csv file with annotations.
+            root_dir (string): Directory with all the images.
+            transform (callable, optional): Optional transform to be applied
+                on a sample.
+        """
+
+        x_sample, y_sample = linear_regression(num_points)
+
+        self.x_sample = x_sample
+        self.y_values = y_sample
+        self.y_values = numpy.reshape(self.y_values, (len(self.y_values), 1))
+
+    def __len__(self):
+        return self.y_values.shape[0]
+
+    def __getitem__(self, index):
+        x_sample = self.x_sample[index, :]
+        x_sample = x_sample.reshape(1, -1)
+
+        y_sample = self.y_values[index]
+
+        # Doubles must be converted to Floats before passing them to a neural network model
+        x_sample = torch.from_numpy(x_sample).float()
+        y_sample = torch.from_numpy(y_sample).float()
+
+        return x_sample, y_sample
+
+
+def linear_data(num_points: int = 10):
+    input_dim = 1
+    output_dim = 1
+    return input_dim, output_dim, LinearData(num_points)
+
+
+class linearRegression(torch.nn.Module):
+    def __init__(self, inputSize, outputSize, device='cpu'):
+        super(linearRegression, self).__init__()
+        self.linear = torch.nn.Linear(inputSize, outputSize)
+
+        self.model = torch.nn.Sequential(self.linear)
+
+        self.device = torch.device(device)
+
+    def forward(self, x):
+        out = self.model(x)
+        return out
+
+    def get_model(self):
+        return self.model
+
+    # getter method for device
+    def get_device(self):
+        return self.device
+
+
+def test_linear_regression_SGD(num_points):
+    inputDim, outputDim, dataset = linear_data(num_points)
+    num_neurons_list = [1]
+    use_bias = True
+    classification_problem = True
+    activation = None
+    weight_decay = 0.0
+    learning_rate = 1e-2
+    batch_size = 1
+    epochs = 10000
+    threshold = 1e-8
+
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size)
+    """
+    model = MLP(inputDim, outputDim, num_neurons_list, use_bias, activation, classification_problem)
+    """
+    model = linearRegression(inputDim, outputDim)
+    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay)
+    optimizer_classic.import_model(model)
+    optimizer_classic.set_loss_function('mse')
+    optimizer_classic.set_optimizer('sgd')
+    training_classic_loss_history = optimizer_classic.train(epochs, threshold, batch_size)
+
+    return training_classic_loss_history
+
+
+def test_linear_regression_Adam(num_points):
+    inputDim, outputDim, dataset = linear_data(num_points)
+    weight_decay = 0.0
+    learning_rate = 1e-2
+    batch_size = 1
+    epochs = 10000
+    threshold = 1e-8
+
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size)
+    """
+    model = MLP(inputDim, outputDim, num_neurons_list, use_bias, activation, classification_problem)
+    """
+    model = linearRegression(inputDim, outputDim)
+    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay)
+    optimizer_classic.import_model(model)
+    optimizer_classic.set_loss_function('mse')
+    optimizer_classic.set_optimizer('adam')
+    training_classic_loss_history = optimizer_classic.train(epochs, threshold, batch_size)
+
+    return training_classic_loss_history
+
+
+def test_linear_regression_sgd_anderson(num_points):
+    inputDim, outputDim, dataset = linear_data(num_points)
+    weight_decay = 0.0
+    learning_rate = 1e-2
+    batch_size = 1
+    epochs = 10000
+    threshold = 1e-8
+    wait_iterations = 1
+    window_depth = 1
+    frequency = 1
+    reg_acc = 0.0
+    store_each = 1
+
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size)
+    """
+    model = MLP(inputDim, outputDim, num_neurons_list, use_bias, activation, classification_problem)
+    """
+    model = linearRegression(inputDim, outputDim)
+    optimizer_anderson = RNA_Acceleration(dataloader, learning_rate, weight_decay, wait_iterations, window_depth,
+                                          frequency,
+                                          reg_acc, store_each)
+    optimizer_anderson.import_model(model)
+    optimizer_anderson.set_loss_function('mse')
+    optimizer_anderson.set_optimizer('sgd')
+    training_classic_loss_history = optimizer_anderson.train(epochs, threshold, batch_size)
+
+    return training_classic_loss_history
+
+
+def test_linear_regression_adam_anderson(num_points):
+    inputDim, outputDim, dataset = linear_data(num_points)
+    weight_decay = 0.0
+    learning_rate = 1e-2
+    batch_size = 1
+    epochs = 10000
+    threshold = 1e-8
+    wait_iterations = 1
+    window_depth = 1
+    frequency = 1
+    reg_acc = 0.0
+    store_each = 1
+
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size)
+    """
+    model = MLP(inputDim, outputDim, num_neurons_list, use_bias, activation, classification_problem)
+    """
+    model = linearRegression(inputDim, outputDim)
+    optimizer_anderson = RNA_Acceleration(dataloader, learning_rate, weight_decay, wait_iterations, window_depth,
+                                          frequency,
+                                          reg_acc, store_each)
+    optimizer_anderson.import_model(model)
+    optimizer_anderson.set_loss_function('mse')
+    optimizer_anderson.set_optimizer('adam')
+    training_classic_loss_history = optimizer_anderson.train(epochs, threshold, batch_size)
+
+    return training_classic_loss_history
+
+
+class TestRegression(unittest.TestCase):
+    def test_sgd(self):
+        self.assertTrue(monotonic(test_linear_regression_SGD(10000)))
+
+    def test_adam(self):
+        self.assertTrue(monotonic(test_linear_regression_SGD(10000)))
+
+    def test_sgd_anderson(self):
+        self.assertTrue(monotonic(test_linear_regression_sgd_anderson(10000)))
+
+    def test_adam_anderson(self):
+        self.assertTrue(monotonic(test_linear_regression_adam_anderson(10000)))
+
 
 if __name__ == "__main__":
-    test_sum()
-    print("Everything passed")
+    unittest.main()
