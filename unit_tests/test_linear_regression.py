@@ -107,6 +107,26 @@ def test_linear_regression_sgd(num_points):
 
     return training_classic_loss_history
 
+def test_linear_regression_rmsprop(num_points):
+    input_dim, output_dim, dataset = linear_data(num_points)
+    use_bias = True
+    learning_rate = 1e-2
+    weight_decay = 0.0    
+    batch_size = 1
+    epochs = 1000
+    threshold = 1e-8
+
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size)
+
+    model = LinearRegression(input_dim, output_dim, use_bias)
+    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay, True)
+    optimizer_classic.import_model(model)
+    optimizer_classic.set_loss_function('mse')
+    optimizer_classic.set_optimizer('rmsprop')
+    training_classic_loss_history = optimizer_classic.train(epochs, threshold, batch_size)
+
+    return training_classic_loss_history
+
 
 def test_linear_regression_adam(num_points):
     input_dim, output_dim, dataset = linear_data(num_points)
@@ -152,6 +172,33 @@ def test_linear_regression_sgd_anderson(num_points):
     optimizer_anderson.import_model(model)
     optimizer_anderson.set_loss_function('mse')
     optimizer_anderson.set_optimizer('sgd')
+    training_classic_loss_history = optimizer_anderson.train(epochs, threshold, batch_size)
+
+    return training_classic_loss_history
+
+def test_linear_regression_rmsprop_anderson(num_points):
+    input_dim, output_dim, dataset = linear_data(num_points)
+    use_bias = True
+    learning_rate = 1e-2
+    weight_decay = 0.0    
+    batch_size = 1
+    epochs = 1000
+    threshold = 1e-8
+    wait_iterations = 1
+    window_depth = epochs
+    frequency = 1
+    reg_acc = 0.0
+    store_each = 1
+
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size)
+
+    model = LinearRegression(input_dim, output_dim, use_bias)
+    optimizer_anderson = RNA_Acceleration(dataloader, learning_rate, weight_decay, wait_iterations, window_depth,
+                                          frequency,
+                                          reg_acc, store_each)
+    optimizer_anderson.import_model(model)
+    optimizer_anderson.set_loss_function('mse')
+    optimizer_anderson.set_optimizer('rmsprop')
     training_classic_loss_history = optimizer_anderson.train(epochs, threshold, batch_size)
 
     return training_classic_loss_history
@@ -302,17 +349,25 @@ def test_neural_network_linear_regression_adam_anderson(num_points):
 class TestRegression(unittest.TestCase):
     def test_sgd(self):
         self.assertTrue(monotonic_decreasing(test_linear_regression_sgd(10000)))
+        
+    def test_rmsprop(self):
+        self.assertTrue(monotonic_decreasing(test_linear_regression_rmsprop(10000)))
 
     def test_adam(self):
         self.assertTrue(monotonic_decreasing(test_linear_regression_adam(10000)))
 
     def test_sgd_anderson(self):
         self.assertTrue(monotonic_decreasing(test_linear_regression_sgd_anderson(10000)))
+        
+    def test_rmsprop_anderson(self):
+        self.assertTrue(monotonic_decreasing(test_linear_regression_rmsprop_anderson(10000)))
+        
 
     def test_adam_anderson(self):
         self.assertTrue(monotonic_decreasing(test_linear_regression_adam_anderson(10000)))
-
+        
     """
+
     def test_nn_sgd(self):
         self.assertTrue(monotonic_decreasing(test_neural_network_linear_regression_sgd(10000)))
 
