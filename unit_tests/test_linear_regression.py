@@ -141,6 +141,7 @@ def test_linear_regression_adam(num_points):
     dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
     model = LinearRegression(input_dim, output_dim, use_bias)
+
     optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay)
     optimizer_classic.import_model(model)
     optimizer_classic.set_loss_function('mse')
@@ -362,13 +363,14 @@ def test_neural_network_linear_regression_sgd(num_points):
 
     model = MLP(inputDim, outputDim, num_neurons_list, use_bias, activation, classification_problem)
 
-    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay,)
+    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay, )
     optimizer_classic.import_model(model)
     optimizer_classic.set_loss_function('mse')
     optimizer_classic.set_optimizer('sgd')
     training_classic_loss_history = optimizer_classic.train(epochs, threshold, batch_size)
 
     return training_classic_loss_history
+
 
 def test_neural_network_linear_regression_adam(num_points):
     inputDim, outputDim, dataset = linear_data(num_points)
@@ -394,6 +396,7 @@ def test_neural_network_linear_regression_adam(num_points):
 
     return training_classic_loss_history
 
+
 def test_neural_network_linear_regression_sgd_anderson(num_points):
     inputDim, outputDim, dataset = linear_data(num_points)
     num_neurons_list = [1]
@@ -409,7 +412,7 @@ def test_neural_network_linear_regression_sgd_anderson(num_points):
     window_depth = 1
     frequency = 1
     reg_acc = 0.0
-    store_each = 1    
+    store_each = 1
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
@@ -441,7 +444,7 @@ def test_neural_network_linear_regression_adam_anderson(num_points):
     window_depth = 1
     frequency = 1
     reg_acc = 0.0
-    store_each = 1    
+    store_each = 1
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
@@ -456,7 +459,6 @@ def test_neural_network_linear_regression_adam_anderson(num_points):
     training_classic_loss_history = optimizer_anderson.train(epochs, threshold, batch_size)
 
     return training_classic_loss_history
-
 
 
 class TestRegression(unittest.TestCase):
