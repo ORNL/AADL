@@ -5,13 +5,13 @@ from torch import Tensor
 from torch import autograd
 from abc import ABCMeta, abstractmethod, ABC
 import math
-from modules.AccelerationModule import AccelerationModule
+from AccelerationModule import AccelerationModule
 
 
 # Abstract class that provides basic guidelines to implement an acceleration
 class Optimizer(object, metaclass=ABCMeta):
     def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, learning_rate: float,
-                 weight_decay: float = 0.0):
+                 weight_decay: float = 0.0, verbose: bool = False):
         """
 
         :type data_loader: torch.utils.data.dataloader.DataLoader
@@ -47,6 +47,8 @@ class Optimizer(object, metaclass=ABCMeta):
         self.optimizer_specified = False
         self.optimizer = None
         self.loss_name = None
+
+        self.verbose = verbose
 
     def set_zero_grad(self):
         assert self.model_imported
@@ -108,10 +110,14 @@ class Optimizer(object, metaclass=ABCMeta):
     def is_optimizer_set(self):
         return self.optimizer_specified
 
+    def print_verbose(self, *args, **kwargs):
+        if self.verbose:
+            print(*args, **kwargs)
+
 
 class FixedPointIteration(Optimizer, ABC):
     def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, learning_rate: float,
-                 weight_decay: float = 0.0):
+                 weight_decay: float = 0.0, verbose: bool = False):
         """
 
         :param learning_rate: :type: float
@@ -124,10 +130,10 @@ class FixedPointIteration(Optimizer, ABC):
         self.model.get_model().train(True)  # True indicates actual training
 
         assert self.optimizer_specified
-
         epoch_counter = 0
+        value_loss = float('Inf')
 
-        while epoch_counter < num_epochs:
+        while epoch_counter < num_epochs and value_loss > threshold:
 
             for batch_idx, (data, target) in enumerate(self.data_loader):
                 data, target = data.to(self.model.get_device()), target.to(self.model.get_device())
@@ -138,9 +144,10 @@ class FixedPointIteration(Optimizer, ABC):
                 loss.backward()
                 self.optimizer.step()
 
-            print("###############################")
-            print('Epoch: ' + str(epoch_counter) + ' - Loss function: ' + str(loss.item()))
+            self.print_verbose("###############################")
+            self.print_verbose('Epoch: ' + str(epoch_counter) + ' - Loss function: ' + str(loss.item()))
 
+            value_loss = loss.item()
             epoch_counter = epoch_counter + 1
             self.training_loss_history.append(loss)
 
@@ -150,7 +157,7 @@ class FixedPointIteration(Optimizer, ABC):
 class RNA_Acceleration(Optimizer, ABC):
     def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, learning_rate: float,
                  weight_decay: float = 0.0, wait_iterations: int = 1, window_depth: int = 15, frequency: int = 1,
-                 reg_acc: float = 0.0, store_each: int = 1):
+                 reg_acc: float = 0.0, store_each: int = 1, verbose: bool = False):
         """
 
         :param learning_rate: :type: float
@@ -174,8 +181,9 @@ class RNA_Acceleration(Optimizer, ABC):
         self.model.get_model().train(True)
         assert self.optimizer_specified
         epoch_counter = 0
+        value_loss = float('Inf')
 
-        while epoch_counter < num_epochs:
+        while epoch_counter < num_epochs and value_loss > threshold:
 
             for batch_idx, (data, target) in enumerate(self.data_loader):
                 data, target = data.to(self.model.get_device()), target.to(self.model.get_device())
@@ -185,14 +193,15 @@ class RNA_Acceleration(Optimizer, ABC):
                 loss.backward()
                 self.optimizer.step()
 
-            print("###############################")
-            print('Epoch: ' + str(epoch_counter) + ' - Loss function: ' + str(loss.item()))
+            self.print_verbose("###############################")
+            self.print_verbose('Epoch: ' + str(epoch_counter) + ' - Loss function: ' + str(loss.item()))
 
             # Acceleration
             self.acc_mod.store(self.model.get_model())
             if (epoch_counter > self.wait_iterations) and (epoch_counter % self.frequency == 0):
                 self.acc_mod.accelerate(self.model.get_model())
 
+            value_loss = loss.item()
             epoch_counter = epoch_counter + 1
             self.training_loss_history.append(loss)
 
