@@ -51,7 +51,7 @@ class NeuralNetwork(torch.nn.Module, metaclass=ABCMeta):
         self.model = None
         self.layers = []
 
-        assert isinstance(activation, str)
+        assert (isinstance(activation, str) or activation is None)
         self.activation = activation
 
         assert isinstance(classification, bool)
