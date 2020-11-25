@@ -98,11 +98,11 @@ class Optimizer(object, metaclass=ABCMeta):
                                              weight_decay=self.weight_decay)
             self.optimizer_specified = True
         elif optimizer_string.lower() == 'rmsprop':
-            self.optimizer = torch.optim.RMSprop(self.model.get_model().parameters(), lr=0.001, alpha=0.99,
+            self.optimizer = torch.optim.RMSprop(self.model.get_model().parameters(), lr=self.lr, alpha=0.99,
                                                  weight_decay=self.weight_decay)
             self.optimizer_specified = True
         elif optimizer_string.lower() == 'adam':
-            self.optimizer = torch.optim.Adam(self.model.get_model().parameters(), lr=0.001, betas=(0.9, 0.999),
+            self.optimizer = torch.optim.Adam(self.model.get_model().parameters(), lr=self.lr, betas=(0.9, 0.999),
                                               weight_decay=self.weight_decay)
             self.optimizer_specified = True
         else:
