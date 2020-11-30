@@ -475,7 +475,7 @@ def test_neural_network_linear_regression_adam_anderson(num_points):
     return training_classic_loss_history
 
 
-class TestRegression(unittest.TestCase):
+class TestLinearRegression(unittest.TestCase):
 
     def test_sgd(self):
         num_points = 2
