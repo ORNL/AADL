@@ -483,7 +483,7 @@ class TestRegression(unittest.TestCase):
         slope = straight_line_parameters[0].item()
         intercept = straight_line_parameters[1].item()
         numeric_slope, numeric_intercept, history = test_linear_regression_sgd(slope, intercept, num_points)
-        print("SGD converged in "+str(len(history))+" iterations "+"\n exact slope: "+str(slope)+"  - "+" numerical slope: "+str(numeric_slope)+"\n"+" -   exact intercept: "+str(intercept)+" - "+" numerical intercept: "+str(numeric_intercept))
+        print("SGD converged in "+str(len(history))+" iterations "+"\n exact slope: "+str(slope)+"  - "+" numerical slope: "+str(numeric_slope)+"\n"+" exact intercept: "+str(intercept)+" - "+" numerical intercept: "+str(numeric_intercept))
         self.assertTrue(abs((slope-numeric_slope))<1e-3 and abs((intercept-numeric_intercept))<1e-3)
     
     def test_rmsprop(self):
@@ -492,7 +492,7 @@ class TestRegression(unittest.TestCase):
         slope = straight_line_parameters[0].item()
         intercept = straight_line_parameters[1].item()
         numeric_slope, numeric_intercept, history = test_linear_regression_rmsprop(slope, intercept, num_points)
-        print("RMSProp converged in "+str(len(history))+" iterations "+"\n exact slope: "+str(slope)+"  - "+" numerical slope: "+str(numeric_slope)+"\n"+" -   exact intercept: "+str(intercept)+" - "+" numerical intercept: "+str(numeric_intercept))
+        print("RMSProp converged in "+str(len(history))+" iterations "+"\n exact slope: "+str(slope)+"  - "+" numerical slope: "+str(numeric_slope)+"\n"+" exact intercept: "+str(intercept)+" - "+" numerical intercept: "+str(numeric_intercept))
         self.assertTrue(abs((slope-numeric_slope))<1e-3 and abs((intercept-numeric_intercept))<1e-3)
     
     def test_adam(self):
@@ -501,7 +501,7 @@ class TestRegression(unittest.TestCase):
         slope = straight_line_parameters[0].item()
         intercept = straight_line_parameters[1].item()
         numeric_slope, numeric_intercept, history = test_linear_regression_adam(slope, intercept, num_points)
-        print("Adam converged in "+str(len(history))+" iterations "+"\n exact slope: "+str(slope)+"  - "+" numerical slope: "+str(numeric_slope)+"\n"+" -   exact intercept: "+str(intercept)+" - "+" numerical intercept: "+str(numeric_intercept))
+        print("Adam converged in "+str(len(history))+" iterations "+"\n exact slope: "+str(slope)+"  - "+" numerical slope: "+str(numeric_slope)+"\n"+" exact intercept: "+str(intercept)+" - "+" numerical intercept: "+str(numeric_intercept))
         self.assertTrue(abs((slope-numeric_slope))<1e-3 and abs((intercept-numeric_intercept))<1e-3)
    
     """    
