@@ -94,7 +94,7 @@ class LinearRegression(torch.nn.Module):
 def test_linear_regression_sgd(slope, intercept, num_points):
     input_dim, output_dim, dataset = linear_data(slope, intercept, num_points)
     use_bias = True
-    learning_rate = 1e-3
+    learning_rate = 1e-4
     weight_decay = 0.0    
     batch_size = 1
     epochs = 100000
@@ -116,7 +116,7 @@ def test_linear_regression_sgd(slope, intercept, num_points):
 def test_linear_regression_rmsprop(slope, intercept, num_points):
     input_dim, output_dim, dataset = linear_data(slope, intercept, num_points)
     use_bias = True
-    learning_rate = 1e-3
+    learning_rate = 1e-4
     weight_decay = 0.0    
     batch_size = 1
     epochs = 100000
@@ -139,7 +139,7 @@ def test_linear_regression_rmsprop(slope, intercept, num_points):
 def test_linear_regression_adam(slope, intercept, num_points):
     input_dim, output_dim, dataset = linear_data(slope, intercept, num_points)
     use_bias = True
-    learning_rate = 1e-3
+    learning_rate = 1e-4
     weight_decay = 0.0    
     batch_size = 1
     epochs = 100000
@@ -163,7 +163,7 @@ def test_linear_regression_adam(slope, intercept, num_points):
 def test_linear_regression_sgd_anderson(slope, intercept, num_points):
     input_dim, output_dim, dataset = linear_data(slope, intercept, num_points)
     use_bias = True
-    learning_rate = 1e-6
+    learning_rate = 1e-4
     weight_decay = 0.0    
     batch_size = 1
     epochs = 10000
@@ -194,7 +194,7 @@ def test_linear_regression_sgd_anderson(slope, intercept, num_points):
 def test_linear_regression_rmsprop_anderson(slope, intercept, num_points):
     input_dim, output_dim, dataset = linear_data(slope, intercept, num_points)
     use_bias = True
-    learning_rate = 1.0
+    learning_rate = 1e-4
     weight_decay = 0.0    
     batch_size = 1
     epochs = 1000
@@ -222,7 +222,7 @@ def test_linear_regression_rmsprop_anderson(slope, intercept, num_points):
 def test_linear_regression_adam_anderson(slope, intercept, num_points):
     input_dim, output_dim, dataset = linear_data(slope, intercept, num_points)
     use_bias = True
-    learning_rate = 1e-2
+    learning_rate = 1e-4
     weight_decay = 0.0    
     batch_size = 1
     epochs = 1000
@@ -494,16 +494,16 @@ class TestLinearRegression(unittest.TestCase):
         print("RMSProp converged in "+str(len(history))+" iterations "+"\n exact slope: "+str(slope)+"  - "+" numerical slope: "+str(numeric_slope)+"\n"+" exact intercept: "+str(intercept)+" - "+" numerical intercept: "+str(numeric_intercept))
         self.assertTrue(abs((slope-numeric_slope))<1e-3 and abs((intercept-numeric_intercept))<1e-3)
     
+    """
     def test_adam(self):
-        num_points = 2
+        num_points = 100
         straight_line_parameters = torch.rand(2, 1)
         slope = straight_line_parameters[0].item()
         intercept = straight_line_parameters[1].item()
         numeric_slope, numeric_intercept, history = test_linear_regression_adam(slope, intercept, num_points)
         print("Adam converged in "+str(len(history))+" iterations "+"\n exact slope: "+str(slope)+"  - "+" numerical slope: "+str(numeric_slope)+"\n"+" exact intercept: "+str(intercept)+" - "+" numerical intercept: "+str(numeric_intercept))
         self.assertTrue(abs((slope-numeric_slope))<1e-3 and abs((intercept-numeric_intercept))<1e-3)
-   
-    """    
+     
     def test_sgd_anderson(self):
         num_points = 2
         straight_line_parameters = torch.rand(2, 1)
