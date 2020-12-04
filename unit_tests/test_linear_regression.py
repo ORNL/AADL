@@ -125,7 +125,7 @@ def test_linear_regression_rmsprop(slope, intercept, num_points):
     dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
     model = LinearRegression(input_dim, output_dim, use_bias)
-    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay, True)
+    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay)
     optimizer_classic.import_model(model)
     optimizer_classic.set_loss_function('mse')
     optimizer_classic.set_optimizer('rmsprop')
@@ -148,7 +148,6 @@ def test_linear_regression_adam(slope, intercept, num_points):
     dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
     model = LinearRegression(input_dim, output_dim, use_bias)
-
     optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay)
     optimizer_classic.import_model(model)
     optimizer_classic.set_loss_function('mse')
@@ -289,7 +288,7 @@ def test_neural_network_linear_regression_adam(slope, intercept, num_points):
 
     model = MLP(input_dim, output_dim, num_neurons_list, use_bias, activation, classification_problem)
 
-    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay,)
+    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay)
     optimizer_classic.import_model(model)
     optimizer_classic.set_loss_function('mse')
     optimizer_classic.set_optimizer('adam')
@@ -321,7 +320,7 @@ def test_neural_network_linear_regression_sgd_anderson(slope, intercept, num_poi
 
     optimizer_anderson = RNA_Acceleration(dataloader, learning_rate, weight_decay, wait_iterations, window_depth,
                                           frequency,
-                                          reg_acc, store_each, True)
+                                          reg_acc, store_each)
     optimizer_anderson.import_model(model)
     optimizer_anderson.set_loss_function('mse')
     optimizer_anderson.set_optimizer('sgd')
