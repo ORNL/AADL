@@ -156,8 +156,8 @@ class FixedPointIteration(Optimizer, ABC):
         return self.training_loss_history
 
 
-class RNA_Acceleration(Optimizer, ABC):
-    def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, learning_rate: float,
+class DeterministicAcceleration(Optimizer, ABC):
+    def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, acceleration_type: str, learning_rate: float,
                  weight_decay: float = 0.0, wait_iterations: int = 1, window_depth: int = 15, frequency: int = 1,
                  reg_acc: float = 0.0, store_each: int = 1, verbose: bool = False):
         """
@@ -165,7 +165,8 @@ class RNA_Acceleration(Optimizer, ABC):
         :param learning_rate: :type: float
         :param weight_decay: :type: float
         """
-        super(RNA_Acceleration, self).__init__(data_loader, learning_rate, weight_decay, verbose)
+        super(DeterministicAcceleration, self).__init__(data_loader, learning_rate, weight_decay, verbose)
+        self.acceleration_type = acceleration_type.lower()
         self.wait_iterations = wait_iterations
         self.store_each = store_each
         self.window_depth = window_depth
@@ -177,7 +178,7 @@ class RNA_Acceleration(Optimizer, ABC):
         assert self.model_imported
 
         # Initialization of acceleration module
-        self.acc_mod = AccelerationModule(self.model.get_model(), self.window_depth, self.reg_acc)
+        self.acc_mod = AccelerationModule(self.acceleration_type, self.model.get_model(), self.window_depth, self.reg_acc)
         self.acc_mod.store(self.model.get_model())
 
         self.model.get_model().train(True)

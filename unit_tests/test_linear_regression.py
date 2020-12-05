@@ -362,6 +362,7 @@ def test_neural_network_linear_regression_adam_anderson(slope, intercept, num_po
 
 class TestLinearRegression(unittest.TestCase):
 
+    """
     def test_sgd(self):
         num_points = 2
         straight_line_parameters = torch.rand(2, 1)
@@ -388,8 +389,9 @@ class TestLinearRegression(unittest.TestCase):
         numeric_slope, numeric_intercept, history = test_linear_regression_adam(slope, intercept, num_points)
         print("Adam converged in "+str(len(history))+" iterations "+"\n exact slope: "+str(slope)+"  - "+" numerical slope: "+str(numeric_slope)+"\n"+" exact intercept: "+str(intercept)+" - "+" numerical intercept: "+str(numeric_intercept))
         self.assertTrue(abs((slope-numeric_slope))<1e-3 and abs((intercept-numeric_intercept))<1e-3)
+    """
    
-    """    
+  
     def test_sgd_anderson(self):
         num_points = 2
         straight_line_parameters = torch.rand(2, 1)
@@ -398,6 +400,7 @@ class TestLinearRegression(unittest.TestCase):
         numeric_slope, numeric_intercept, history = test_linear_regression_sgd_anderson(slope, intercept, num_points)
         self.assertTrue(abs((slope-numeric_slope))<1e-3 and abs((intercept-numeric_intercept))<1e-3)
       
+    """
     def test_rmsprop_anderson(self):
         self.assertTrue(monotonic_decreasing(test_linear_regression_rmsprop_anderson(1)))
         

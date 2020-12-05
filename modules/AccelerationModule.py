@@ -4,10 +4,11 @@ import sys
 
 sys.path.append("../utils")
 import rna_acceleration as rna
+import anderson as anderson
 
 
 class AccelerationModule(object):
-    def __init__(self, model: torch.nn.Module, window_depth: int = 15, reg_acc: float = 1e-5, store_each: int = 1):
+    def __init__(self, acceleration_type: str, model: torch.nn.Module, window_depth: int = 15, reg_acc: float = 1e-5, store_each: int = 1):
         """
 
         :param model: :type torch.nn.Module
@@ -15,6 +16,7 @@ class AccelerationModule(object):
         :param reg_acc: :type float
         :param store_each: :type int
         """
+        self.acceleration_type = acceleration_type.lower()
         self.store_counter = 0
 
         self.x_hist = []
@@ -82,8 +84,13 @@ class AccelerationModule(object):
             return 1
 
         x_hist_np = np.array(self.x_hist).transpose()
-        x_acc, c = rna.rna(x_hist_np, self.reg_acc)
-
+        
+        if self.acceleration_type == 'anderson':
+            x_acc, c = anderson.anderson(x_hist_np, self.reg_acc)
+            
+        elif self.acceleration_type == 'rna':
+            x_acc, c = rna.rna(x_hist_np, self.reg_acc)
+    
         if step_size == 1.0:
             self.load_param_in_model(x_acc, model)
         else:
