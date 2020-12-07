@@ -4,7 +4,7 @@ import sys
 
 sys.path.append("../utils")
 import rna_acceleration as rna
-import anderson as anderson
+import anderson_acceleration as anderson
 
 
 class AccelerationModule(object):

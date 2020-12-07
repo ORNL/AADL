@@ -202,7 +202,7 @@ class DeterministicAcceleration(Optimizer, ABC):
             # Acceleration
             self.acc_mod.store(self.model.get_model())
             if (epoch_counter > self.wait_iterations) and (epoch_counter % self.frequency == 0):
-                self.acc_mod.accelerate(self.model.get_model())
+                self.acc_mod.accelerate(self.model.get_model(), self.lr)
 
             value_loss = loss.item()
             epoch_counter = epoch_counter + 1

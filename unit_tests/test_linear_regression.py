@@ -6,7 +6,7 @@ import unittest
 
 sys.path.append('../modules')
 from NN_models import MLP
-from optimizers import FixedPointIteration, RNA_Acceleration
+from optimizers import FixedPointIteration, DeterministicAcceleration
 
 
 def linear_regression(slope, intercept, n: int = 10):
@@ -162,23 +162,23 @@ def test_linear_regression_adam(slope, intercept, num_points):
 def test_linear_regression_sgd_anderson(slope, intercept, num_points):
     input_dim, output_dim, dataset = linear_data(slope, intercept, num_points)
     use_bias = True
-    learning_rate = 1e-6
+    learning_rate = 1e-3
     weight_decay = 0.0    
     batch_size = 1
     epochs = 10000
     threshold = 1e-8
-    wait_iterations = 1
+    wait_iterations = 100
     window_depth = epochs
     frequency = 1
-    reg_acc = 0.0
+    reg_acc = 1e-8
     store_each = 1
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
     model = LinearRegression(input_dim, output_dim, use_bias)
-    optimizer_anderson = RNA_Acceleration(dataloader, learning_rate, weight_decay, wait_iterations, window_depth,
+    optimizer_anderson = DeterministicAcceleration(dataloader, 'anderson', learning_rate, weight_decay, wait_iterations, window_depth,
                                           frequency,
-                                          reg_acc, store_each, True)
+                                          reg_acc, store_each)
     optimizer_anderson.import_model(model)
     optimizer_anderson.set_loss_function('mse')
     optimizer_anderson.set_optimizer('sgd')
@@ -193,21 +193,21 @@ def test_linear_regression_sgd_anderson(slope, intercept, num_points):
 def test_linear_regression_rmsprop_anderson(slope, intercept, num_points):
     input_dim, output_dim, dataset = linear_data(slope, intercept, num_points)
     use_bias = True
-    learning_rate = 1.0
+    learning_rate = 1e-3
     weight_decay = 0.0    
     batch_size = 1
-    epochs = 1000
+    epochs = 10000
     threshold = 1e-8
-    wait_iterations = 1
+    wait_iterations = 100
     window_depth = epochs
     frequency = 1
-    reg_acc = 0.0
+    reg_acc = 1e-8
     store_each = 1
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
     model = LinearRegression(input_dim, output_dim, use_bias)
-    optimizer_anderson = RNA_Acceleration(dataloader, learning_rate, weight_decay, wait_iterations, window_depth,
+    optimizer_anderson = DeterministicAcceleration(dataloader, 'anderson', learning_rate, weight_decay, wait_iterations, window_depth,
                                           frequency,
                                           reg_acc, store_each)
     optimizer_anderson.import_model(model)
@@ -215,27 +215,29 @@ def test_linear_regression_rmsprop_anderson(slope, intercept, num_points):
     optimizer_anderson.set_optimizer('rmsprop')
     training_classic_loss_history = optimizer_anderson.train(epochs, threshold, batch_size)
 
-    return training_classic_loss_history
+    weights = list(model.get_model().parameters())
+
+    return weights[0].item(), weights[1].item(), training_classic_loss_history
 
 
 def test_linear_regression_adam_anderson(slope, intercept, num_points):
     input_dim, output_dim, dataset = linear_data(slope, intercept, num_points)
     use_bias = True
-    learning_rate = 1e-2
+    learning_rate = 1e-3
     weight_decay = 0.0    
     batch_size = 1
-    epochs = 1000
+    epochs = 10000
     threshold = 1e-8
-    wait_iterations = 1
+    wait_iterations = 100
     window_depth = epochs
     frequency = 1
-    reg_acc = 0.0
+    reg_acc = 1e-8
     store_each = 1
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
     model = LinearRegression(input_dim, output_dim, use_bias)
-    optimizer_anderson = RNA_Acceleration(dataloader, learning_rate, weight_decay, wait_iterations, window_depth,
+    optimizer_anderson = DeterministicAcceleration(dataloader, 'anderson', learning_rate, weight_decay, wait_iterations, window_depth,
                                           frequency,
                                           reg_acc, store_each)
     optimizer_anderson.import_model(model)
@@ -243,7 +245,9 @@ def test_linear_regression_adam_anderson(slope, intercept, num_points):
     optimizer_anderson.set_optimizer('adam')
     training_classic_loss_history = optimizer_anderson.train(epochs, threshold, batch_size)
 
-    return training_classic_loss_history
+    weights = list(model.get_model().parameters())
+
+    return weights[0].item(), weights[1].item(), training_classic_loss_history
 
 
 def test_neural_network_linear_regression_sgd(slope, intercept, num_points):
@@ -362,7 +366,6 @@ def test_neural_network_linear_regression_adam_anderson(slope, intercept, num_po
 
 class TestLinearRegression(unittest.TestCase):
 
-    """
     def test_sgd(self):
         num_points = 2
         straight_line_parameters = torch.rand(2, 1)
@@ -371,7 +374,7 @@ class TestLinearRegression(unittest.TestCase):
         numeric_slope, numeric_intercept, history = test_linear_regression_sgd(slope, intercept, num_points)
         print("SGD converged in "+str(len(history))+" iterations "+"\n exact slope: "+str(slope)+"  - "+" numerical slope: "+str(numeric_slope)+"\n"+" exact intercept: "+str(intercept)+" - "+" numerical intercept: "+str(numeric_intercept))
         self.assertTrue(abs((slope-numeric_slope))<1e-3 and abs((intercept-numeric_intercept))<1e-3)
-    
+
     def test_rmsprop(self):
         num_points = 2
         straight_line_parameters = torch.rand(2, 1)
@@ -389,24 +392,34 @@ class TestLinearRegression(unittest.TestCase):
         numeric_slope, numeric_intercept, history = test_linear_regression_adam(slope, intercept, num_points)
         print("Adam converged in "+str(len(history))+" iterations "+"\n exact slope: "+str(slope)+"  - "+" numerical slope: "+str(numeric_slope)+"\n"+" exact intercept: "+str(intercept)+" - "+" numerical intercept: "+str(numeric_intercept))
         self.assertTrue(abs((slope-numeric_slope))<1e-3 and abs((intercept-numeric_intercept))<1e-3)
-    """
-   
-  
+
     def test_sgd_anderson(self):
         num_points = 2
         straight_line_parameters = torch.rand(2, 1)
         slope = straight_line_parameters[0].item()
         intercept = straight_line_parameters[1].item()
         numeric_slope, numeric_intercept, history = test_linear_regression_sgd_anderson(slope, intercept, num_points)
+        print("SGD + Anderson converged in "+str(len(history))+" iterations "+"\n exact slope: "+str(slope)+"  - "+" numerical slope: "+str(numeric_slope)+"\n"+" exact intercept: "+str(intercept)+" - "+" numerical intercept: "+str(numeric_intercept))     
         self.assertTrue(abs((slope-numeric_slope))<1e-3 and abs((intercept-numeric_intercept))<1e-3)
-      
-    """
-    def test_rmsprop_anderson(self):
-        self.assertTrue(monotonic_decreasing(test_linear_regression_rmsprop_anderson(1)))
-        
-    def test_adam_anderson(self):
-        self.assertTrue(monotonic_decreasing(test_linear_regression_adam_anderson(2)))
 
+    def test_rmsprop_anderson(self):
+        num_points = 2
+        straight_line_parameters = torch.rand(2, 1)
+        slope = straight_line_parameters[0].item()
+        intercept = straight_line_parameters[1].item()
+        numeric_slope, numeric_intercept, history = test_linear_regression_rmsprop_anderson(slope, intercept, num_points)
+        print("RMSProp + Anderson converged in "+str(len(history))+" iterations "+"\n exact slope: "+str(slope)+"  - "+" numerical slope: "+str(numeric_slope)+"\n"+" exact intercept: "+str(intercept)+" - "+" numerical intercept: "+str(numeric_intercept))     
+        self.assertTrue(abs((slope-numeric_slope))<1e-3 and abs((intercept-numeric_intercept))<1e-3)
+    
+    def test_adam_anderson(self):
+        num_points = 2
+        straight_line_parameters = torch.rand(2, 1)
+        slope = straight_line_parameters[0].item()
+        intercept = straight_line_parameters[1].item()
+        numeric_slope, numeric_intercept, history = test_linear_regression_rmsprop_anderson(slope, intercept, num_points)
+        print("Adam + Anderson converged in "+str(len(history))+" iterations "+"\n exact slope: "+str(slope)+"  - "+" numerical slope: "+str(numeric_slope)+"\n"+" exact intercept: "+str(intercept)+" - "+" numerical intercept: "+str(numeric_intercept))     
+        self.assertTrue(abs((slope-numeric_slope))<1e-3 and abs((intercept-numeric_intercept))<1e-3)
+    """
     def test_nn_sgd(self):
         self.assertTrue(monotonic_decreasing(test_neural_network_linear_regression_sgd(10000)))
 

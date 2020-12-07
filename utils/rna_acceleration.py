@@ -80,7 +80,8 @@ def rna_precomputed(X, RR, reg=0):
     try:
         z = np.linalg.solve(RR + reg_I, np.ones(k))
     except LA.linalg.LinAlgError:
-        z, = np.linalg.lstsq(RR + reg_I, np.ones(k), -1)
+        z = np.linalg.lstsq(RR+reg_I, np.ones(k), -1);
+        z = z[0]
 
     # Recover weights c, where sum(c) = 1
     if np.abs(np.sum(z)) < 1e-10:
