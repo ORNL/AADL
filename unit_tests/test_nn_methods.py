@@ -41,7 +41,7 @@ def neural_network_linear_regression(slope, intercept, num_points, optimizer_str
     return weights, training_classic_loss_history
 
 
-def general_test_neural_network_linear_regression(optimizer):
+def test_neural_network_linear_regression(optimizer):
         num_points = 2
         straight_line_parameters = torch.rand(2, 1)
         slope = straight_line_parameters[0].item()
@@ -56,14 +56,14 @@ def general_test_neural_network_linear_regression(optimizer):
 class TestLinearRegression(unittest.TestCase):
 
     def test_neural_network_linear_regression_sgd(self):
-            general_test_neural_network_linear_regression('sgd')
+            test_neural_network_linear_regression('sgd')
 
     
     def test_neural_network_linear_regression_rmsprop(self):
-            general_test_neural_network_linear_regression('rmsprop')
+            test_neural_network_linear_regression('rmsprop')
             
     def test_neural_network_linear_regression_adam(self):
-            general_test_neural_network_linear_regression('adam') 
+            test_neural_network_linear_regression('adam') 
     
 
 ###############################################################################
