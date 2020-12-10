@@ -64,7 +64,7 @@ class TestLinearRegression(unittest.TestCase):
         self.assertTrue( history[-1].item()<1e-8 )
     
     def test_neural_network_linear_regression_adam(self):
-        num_points = 100
+        num_points = 2
         straight_line_parameters = torch.rand(2, 1)
         slope = straight_line_parameters[0].item()
         intercept = straight_line_parameters[1].item()
