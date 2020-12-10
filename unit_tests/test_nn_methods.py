@@ -14,8 +14,7 @@ from optimizers import FixedPointIteration, RNA_Acceleration
 
 ###############################################################################
 
-
-def test_neural_network_linear_regression(slope, intercept, num_points, optimizer_str):
+def neural_network_linear_regression(slope, intercept, num_points, optimizer_str):
     inputDim, outputDim, dataset = dataloaders.linear_data(slope, intercept, num_points)
     num_neurons_list = [1]
     use_bias = True
@@ -42,35 +41,30 @@ def test_neural_network_linear_regression(slope, intercept, num_points, optimize
     return weights, training_classic_loss_history
 
 
+def general_test_neural_network_linear_regression(optimizer):
+        num_points = 2
+        straight_line_parameters = torch.rand(2, 1)
+        slope = straight_line_parameters[0].item()
+        intercept = straight_line_parameters[1].item()
+        numeric_weights, history = neural_network_linear_regression(slope, intercept, num_points, optimizer)
+        assert( history[-1].item()<1e-8 )
+
+
 ###############################################################################
 
 
 class TestLinearRegression(unittest.TestCase):
 
     def test_neural_network_linear_regression_sgd(self):
-        num_points = 2
-        straight_line_parameters = torch.rand(2, 1)
-        slope = straight_line_parameters[0].item()
-        intercept = straight_line_parameters[1].item()
-        numeric_weights, history = test_neural_network_linear_regression(slope, intercept, num_points, 'sgd')
-        self.assertTrue( history[-1].item()<1e-8 )
+            general_test_neural_network_linear_regression('sgd')
+
     
     def test_neural_network_linear_regression_rmsprop(self):
-        num_points = 2
-        straight_line_parameters = torch.rand(2, 1)
-        slope = straight_line_parameters[0].item()
-        intercept = straight_line_parameters[1].item()
-        numeric_weights, history = test_neural_network_linear_regression(slope, intercept, num_points, 'rmsprop')
-        self.assertTrue( history[-1].item()<1e-8 )
-    
+            general_test_neural_network_linear_regression('rmsprop')
+            
     def test_neural_network_linear_regression_adam(self):
-        num_points = 2
-        straight_line_parameters = torch.rand(2, 1)
-        slope = straight_line_parameters[0].item()
-        intercept = straight_line_parameters[1].item()
-        numeric_weights, history = test_neural_network_linear_regression(slope, intercept, num_points, 'adam')
-        self.assertTrue( history[-1].item()<1e-8 )      
-
+            general_test_neural_network_linear_regression('adam') 
+    
 
 ###############################################################################
 
