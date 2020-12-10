@@ -51,7 +51,7 @@ class NeuralNetwork(torch.nn.Module, metaclass=ABCMeta):
         self.model = None
         self.layers = []
 
-        assert isinstance(activation, str)
+        assert (isinstance(activation, str) or activation is None)
         self.activation = activation
 
         assert isinstance(classification, bool)
@@ -130,13 +130,16 @@ class MLP(NeuralNetwork, ABC):
 
         # Input layer
         self.layers += [torch.nn.Linear(self.input_dim, self.num_neurons_list[0], bias=self.use_bias)]
-        self.layers += [activation_function(self.activation)]
+
+        if self.activation is not None:
+            self.layers += [activation_function(self.activation)]
 
         # Hidden layers
         for layer_index in range(0, len(self.num_neurons_list) - 1):
             self.layers += [torch.nn.Linear(self.num_neurons_list[layer_index], self.num_neurons_list[layer_index + 1],
                                             bias=self.use_bias)]
-            self.layers += [activation_function(self.activation)]
+            if self.activation is not None:
+                self.layers += [activation_function(self.activation)]
 
         # Output layer
         self.layers += [torch.nn.Linear(self.num_neurons_list[-1], self.output_dim, bias=self.use_bias)]
@@ -210,7 +213,9 @@ class CNN2D(NeuralNetwork, ABC):
                                             out_channels=self.num_neurons_list[layer_index + 1],
                                             kernel_size=ker_size, stride=1, padding=1,
                                             bias=self.use_bias)]
-            self.layers += [activation_function(self.activation)]
+
+            if self.activation is not None:
+                self.layers += [activation_function(self.activation)]
 
         # Output layer
         self.layers += [torch.nn.Flatten()]
