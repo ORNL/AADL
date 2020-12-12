@@ -155,7 +155,7 @@ class FixedPointIteration(Optimizer, ABC):
 
 
 class DeterministicAcceleration(Optimizer, ABC):
-    def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, acceleration_type: str, learning_rate: float,
+    def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, acceleration_type: str, learning_rate: float, relaxation:float, 
                  weight_decay: float = 0.0, wait_iterations: int = 1, window_depth: int = 15, frequency: int = 1,
                  reg_acc: float = 0.0, store_each: int = 1, verbose: bool = False):
         """
@@ -166,6 +166,7 @@ class DeterministicAcceleration(Optimizer, ABC):
         super(DeterministicAcceleration, self).__init__(data_loader, learning_rate, weight_decay, verbose)
         self.acceleration_type = acceleration_type.lower()
         self.wait_iterations = wait_iterations
+        self.relaxation = relaxation
         self.store_each = store_each
         self.window_depth = window_depth
         self.frequency = frequency
@@ -200,7 +201,7 @@ class DeterministicAcceleration(Optimizer, ABC):
             # Acceleration
             self.acc_mod.store(self.model.get_model())
             if (epoch_counter > self.wait_iterations) and (epoch_counter % self.frequency == 0):
-                self.acc_mod.accelerate(self.model.get_model(), self.lr)
+                self.acc_mod.accelerate(self.model.get_model(), self.relaxation)
 
             value_loss = loss.item()
             epoch_counter = epoch_counter + 1
