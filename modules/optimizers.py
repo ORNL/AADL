@@ -50,8 +50,6 @@ class Optimizer(object, metaclass=ABCMeta):
 
         self.verbose = verbose
 
-        self.verbose = verbose
-
     def set_zero_grad(self):
         assert self.model_imported
         torch.autograd.zero_grad(self.model.parameters())
