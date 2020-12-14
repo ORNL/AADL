@@ -48,7 +48,7 @@ from numpy.core.defchararray import lower
 sys.path.append("./utils")
 sys.path.append("./modules")
 from modules.NN_models import MLP, CNN2D
-from modules.optimizers import FixedPointIteration, RNA_Acceleration
+from modules.optimizers import FixedPointIteration, DeterministicAcceleration
 from utils.dataloaders import graduate_admission_data, mnist_data, cifar10_data
 
 plt.rcParams.update({'font.size': 16})
@@ -123,7 +123,6 @@ if __name__ == '__main__':
     # Import data
     if str(lower(config['dataset'])) == 'graduate_admission':
         input_dim, output_dim, dataset = graduate_admission_data()
-        n_classes = 10
     elif str(lower(config['dataset'])) == 'mnist':
         input_dim, output_dim, dataset = mnist_data()
         n_classes = 10
@@ -162,7 +161,7 @@ if __name__ == '__main__':
 
     training_classic_loss_history = optimizer_classic.train(epochs, threshold, batch_size)
 
-    optimizer_anderson = RNA_Acceleration(dataloader, learning_rate, weight_decay, wait_iterations, window_depth, frequency,
+    optimizer_anderson = DeterministicAcceleration(dataloader, 'anderson', learning_rate, 0.1, weight_decay, wait_iterations, window_depth, frequency,
                                           reg_acc, store_each)
 
     optimizer_anderson.import_model(model_anderson)
@@ -175,7 +174,7 @@ if __name__ == '__main__':
         epochs1 = range(1, len(training_classic_loss_history) + 1)
         epochs2 = range(1, len(training_anderson_loss_history) + 1)
         plt.plot(epochs1, training_classic_loss_history, label='training loss - Fixed Point')
-        plt.plot(epochs2, training_anderson_loss_history, label='training loss - RNA')
+        plt.plot(epochs2, training_anderson_loss_history, label='training loss - Anderson')
         plt.yscale('log')
         plt.title('Training accuracy')
         plt.xlabel('Epochs')

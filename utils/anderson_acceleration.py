@@ -26,44 +26,47 @@ def anderson(X, reg=0):
     X = np.asmatrix(X)  # check if necessary
 
     # Compute the matrix of residuals
-    R = np.diff(X)
+    DX = np.diff(X)
+    DR = np.diff(DX)
+
+    projected_residual = np.matmul(DR.T, DX[:,k-1])
+    DX = DX[:,:-1]
 
     # "Square" the matrix, and normalize it
-    RR = np.matmul(np.transpose(R), R)
+    RR = np.matmul(np.transpose(DR), DR)
 
     # Solve (R'R + lambda I)z = 1
-    (extr, c) = anderson_precomputed(X, RR, reg)
+    (extr, c) = anderson_precomputed(DX, RR, projected_residual, reg)
 
     # Compute the extrapolation / weigthed mean  "sum_i c_i x_i", and return
     return extr, c
 
 
-def anderson_precomputed(X, RR, reg=0):
+def anderson_precomputed(DX, RR, residual, reg=0):
     # Regularized Nonlinear Acceleration, with RR precomputed
     # Same than rna, but RR is computed only once
 
     # Recovers parameters
-    (d, k) = X.shape
-    k = k - 1
+    (d, k) = DX.shape
 
     # Solve (R'R + lambda I)z = 1
     reg_I = reg * np.eye(k)
 
     # In case of singular matrix, we solve using least squares instead
     try:
-        z = np.linalg.solve(RR + reg_I, np.ones(k))
+        z = np.linalg.solve(RR + reg_I, residual)
     except LA.linalg.LinAlgError:
-        z = np.linalg.lstsq(RR+reg_I, np.ones(k), -1);
+        z = np.linalg.lstsq(RR+reg_I, residual, -1)
         z = z[0]
 
     # Recover weights c, where sum(c) = 1
     if np.abs(np.sum(z)) < 1e-10:
-        z = np.ones(k)
+        z = np.ones((k,1))
 
-    c = np.asmatrix(z / np.sum(z)).T
+    alpha = np.asmatrix(z / np.sum(z))
 
     # Compute the extrapolation / weigthed mean  "sum_i c_i x_i", and return
-    extr = np.dot(X[:, 1:k + 1], c[:, 0])
-    return np.array(extr), c
+    extr = np.matmul(DX, alpha)
+    return np.array(extr), alpha
 
 

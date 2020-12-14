@@ -29,15 +29,6 @@ class Optimizer(object, metaclass=ABCMeta):
         assert isinstance(weight_decay, float)
         self.weight_decay = weight_decay
 
-        """ 
-        # THIS IS KEPT HERE JUST FOR A REMINDER TO ADD EXTRA PARAMETERS IN THE ANDERSON CHILD CLASS
-        assert isinstance(window_depth, int)
-        self.window_depth = window_depth
-
-        assert isinstance(frequency, int)
-        self.freq = frequency
-        """
-
         self.model_imported = False
         self.model = None
 
