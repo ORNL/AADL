@@ -115,7 +115,7 @@ if __name__ == '__main__':
 
     # Parameters for RNA optimizer
     wait_iterations = int(config['wait_iterations'])
-    window_depth = int(config['depth'])
+    history_depth = int(config['depth'])
     frequency = int(config['frequency'])
     store_each = int(config['store_each'])
     reg_acc = float(config['regularization'])
@@ -161,7 +161,7 @@ if __name__ == '__main__':
 
     training_classic_loss_history = optimizer_classic.train(epochs, threshold, batch_size)
 
-    optimizer_anderson = DeterministicAcceleration(dataloader, 'anderson', learning_rate, 0.1, weight_decay, wait_iterations, window_depth, frequency,
+    optimizer_anderson = DeterministicAcceleration(dataloader, 'anderson', learning_rate, 0.1, weight_decay, wait_iterations, history_depth, frequency,
                                           reg_acc, store_each)
 
     optimizer_anderson.import_model(model_anderson)

@@ -147,7 +147,7 @@ class FixedPointIteration(Optimizer, ABC):
 
 class DeterministicAcceleration(Optimizer, ABC):
     def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, acceleration_type: str, learning_rate: float, relaxation:float, 
-                 weight_decay: float = 0.0, wait_iterations: int = 1, window_depth: int = 15, frequency: int = 1,
+                 weight_decay: float = 0.0, wait_iterations: int = 1, history_depth: int = 15, frequency: int = 1,
                  reg_acc: float = 0.0, store_each: int = 1, verbose: bool = False):
         """
 
@@ -159,7 +159,7 @@ class DeterministicAcceleration(Optimizer, ABC):
         self.wait_iterations = wait_iterations
         self.relaxation = relaxation
         self.store_each = store_each
-        self.window_depth = window_depth
+        self.history_depth = history_depth
         self.frequency = frequency
         self.reg_acc = reg_acc
 
@@ -168,7 +168,7 @@ class DeterministicAcceleration(Optimizer, ABC):
         assert self.model_imported
 
         # Initialization of acceleration module
-        self.acc_mod = AccelerationModule(self.acceleration_type, self.model.get_model(), self.window_depth, self.reg_acc)
+        self.acc_mod = AccelerationModule(self.acceleration_type, self.model.get_model(), self.history_depth, self.reg_acc)
         self.acc_mod.store(self.model.get_model())
 
         self.model.get_model().train(True)

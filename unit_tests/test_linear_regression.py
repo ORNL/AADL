@@ -46,7 +46,7 @@ def linear_regression_anderson(slope, intercept, num_points, optimizer_str):
     epochs = 100000
     threshold = 1e-8
     wait_iterations = 1
-    window_depth = 100
+    history_depth = 100
     frequency = 1
     reg_acc = 1e-9
     store_each = 1
@@ -54,7 +54,7 @@ def linear_regression_anderson(slope, intercept, num_points, optimizer_str):
     dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
     model = LinearRegression(input_dim, output_dim, use_bias)
-    optimizer_anderson = DeterministicAcceleration(dataloader, 'anderson', learning_rate, relaxation, weight_decay, wait_iterations, window_depth,
+    optimizer_anderson = DeterministicAcceleration(dataloader, 'anderson', learning_rate, relaxation, weight_decay, wait_iterations, history_depth,
                                           frequency,
                                           reg_acc, store_each)
     optimizer_anderson.import_model(model)

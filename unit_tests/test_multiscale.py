@@ -33,7 +33,7 @@ def test_multiscale_paraboloid_anderson(dim=100, condition_number=1.e3, optimize
     batch_size = dim
     relaxation = 1e-2
     wait_iterations = 1
-    window_depth = 100
+    history_depth = 100
     frequency = 1
     reg_acc = 1e-9
     store_each = 1
@@ -42,7 +42,7 @@ def test_multiscale_paraboloid_anderson(dim=100, condition_number=1.e3, optimize
     dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
     model = Paraboloid(dim, condition_number=condition_number)
-    optimizer_anderson = DeterministicAcceleration(dataloader, 'anderson', lr, relaxation, w_decay, wait_iterations, window_depth,
+    optimizer_anderson = DeterministicAcceleration(dataloader, 'anderson', lr, relaxation, w_decay, wait_iterations, history_depth,
                                           frequency,
                                           reg_acc, store_each)
     

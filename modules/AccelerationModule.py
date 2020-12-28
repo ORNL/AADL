@@ -8,11 +8,11 @@ import anderson_acceleration as anderson
 
 
 class AccelerationModule(object):
-    def __init__(self, acceleration_type: str, model: torch.nn.Module, window_depth: int = 15, reg_acc: float = 1e-5, store_each: int = 1):
+    def __init__(self, acceleration_type: str, model: torch.nn.Module, history_depth: int = 15, reg_acc: float = 1e-5, store_each: int = 1):
         """
 
         :param model: :type torch.nn.Module
-        :param window_depth: :type int
+        :param history_depth: :type int
         :param reg_acc: :type float
         :param store_each: :type int
         """
@@ -20,7 +20,7 @@ class AccelerationModule(object):
         self.store_counter = 0
 
         self.x_hist = []
-        self.window_depth = window_depth
+        self.history_depth = history_depth
         self.reg_acc = reg_acc
         self.input_shape = dict()
         self.store_each = store_each
@@ -49,7 +49,7 @@ class AccelerationModule(object):
             return  # don't store
 
         if len(
-                self.x_hist) > self.window_depth:  # with this, len(x_hist) < window_depth+1, so number of coeffs < window_depth
+                self.x_hist) > self.history_depth:  # with this, len(x_hist) < history_depth+1, so number of coeffs < history_depth
             self.x_hist.pop(0)
 
         self.x_hist.append(self.extract_x(model))
