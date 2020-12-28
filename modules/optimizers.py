@@ -168,7 +168,7 @@ class DeterministicAcceleration(Optimizer, ABC):
         assert self.model_imported
 
         # Initialization of acceleration module
-        self.acc_mod = AccelerationModule(self.acceleration_type, self.model.get_model(), self.history_depth, self.reg_acc)
+        self.acc_mod = AccelerationModule(self.acceleration_type, self.model.get_model(), self.history_depth, self.reg_acc, self.store_each)
         self.acc_mod.store(self.model.get_model())
 
         self.model.get_model().train(True)
