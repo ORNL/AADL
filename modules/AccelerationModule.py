@@ -27,8 +27,7 @@ class AccelerationModule(object):
 
         key = 0
         for param in model.parameters():
-            data_np = param.data.cpu().numpy()
-            self.input_shape[key] = (data_np.shape, data_np.size)
+            self.input_shape[key] = (param.data.shape, param.data.numel())
             key += 1
 
     def extract_x(self, model):
