@@ -11,14 +11,17 @@ from numpy import linalg as LA
 
 
 def anderson(X, reg=0):
-    # Regularized Nonlinear Acceleration
-    # Take a matrix X of iterates, where X[:,i] is the ith iteration of the
+    # Anderson Acceleration
+    # Take a matrix X of iterates, where X[:,i] is the difference between the {i+1}th and the ith iterations of the
     # fixed-point operation
     #   x_i = g(x_{i-1})
+    #   
+    #   r_i = x_{i+1} - x_i
+    #   X[:,i] = r_i
     #
     # reg is the regularization parameter used for solving the system
-    #   (R'R + reg I)z = 1
-    # where R is the matrix of residuals, i.e. R[:,i] = x_{i+1}-x_{i}
+    #   (F'F + reg I)z = r_{i+1}
+    # where F is the matrix of differences in the residual, i.e. R[:,i] = r_{i+1}-r_{i}
 
     # Recovers parameters, ensure X is a matrix
     (d, k) = np.shape(X)
