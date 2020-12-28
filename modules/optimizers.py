@@ -29,15 +29,6 @@ class Optimizer(object, metaclass=ABCMeta):
         assert isinstance(weight_decay, float)
         self.weight_decay = weight_decay
 
-        """ 
-        # THIS IS KEPT HERE JUST FOR A REMINDER TO ADD EXTRA PARAMETERS IN THE ANDERSON CHILD CLASS
-        assert isinstance(window_depth, int)
-        self.window_depth = window_depth
-
-        assert isinstance(frequency, int)
-        self.freq = frequency
-        """
-
         self.model_imported = False
         self.model = None
 
@@ -154,19 +145,21 @@ class FixedPointIteration(Optimizer, ABC):
         return self.training_loss_history
 
 
-class RNA_Acceleration(Optimizer, ABC):
-    def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, learning_rate: float,
-                 weight_decay: float = 0.0, wait_iterations: int = 1, window_depth: int = 15, frequency: int = 1,
-                 reg_acc: float = 0.0, store_each: int = 1, verbose: bool = False):
+class DeterministicAcceleration(Optimizer, ABC):
+    def __init__(self, data_loader: torch.utils.data.dataloader.DataLoader, acceleration_type: str, learning_rate: float, relaxation:float, 
+                 weight_decay: float = 0.0, wait_iterations: int = 1, history_depth: int = 15, frequency: int = 1,
+                 reg_acc: float = 0.0, store_each_nth: int = 1, verbose: bool = False):
         """
 
         :param learning_rate: :type: float
         :param weight_decay: :type: float
         """
-        super(RNA_Acceleration, self).__init__(data_loader, learning_rate, weight_decay, verbose)
+        super(DeterministicAcceleration, self).__init__(data_loader, learning_rate, weight_decay, verbose)
+        self.acceleration_type = acceleration_type.lower()
         self.wait_iterations = wait_iterations
-        self.store_each = store_each
-        self.window_depth = window_depth
+        self.relaxation = relaxation
+        self.store_each_nth = store_each_nth
+        self.history_depth = history_depth
         self.frequency = frequency
         self.reg_acc = reg_acc
 
@@ -175,7 +168,7 @@ class RNA_Acceleration(Optimizer, ABC):
         assert self.model_imported
 
         # Initialization of acceleration module
-        self.acc_mod = AccelerationModule(self.model.get_model(), self.window_depth, self.reg_acc)
+        self.acc_mod = AccelerationModule(self.acceleration_type, self.model.get_model(), self.history_depth, self.reg_acc, self.store_each_nth)
         self.acc_mod.store(self.model.get_model())
 
         self.model.get_model().train(True)
@@ -199,7 +192,7 @@ class RNA_Acceleration(Optimizer, ABC):
             # Acceleration
             self.acc_mod.store(self.model.get_model())
             if (epoch_counter > self.wait_iterations) and (epoch_counter % self.frequency == 0):
-                self.acc_mod.accelerate(self.model.get_model())
+                self.acc_mod.accelerate(self.model.get_model(), self.relaxation)
 
             value_loss = loss.item()
             epoch_counter = epoch_counter + 1
