@@ -63,18 +63,18 @@ class AccelerationModule(object):
             (shape, num_elem) = self.input_shape[key]
             last_idx = first_idx + num_elem
             if self.acceleration_type == 'rna':
-                param.data = torch.as_tensor(
+                param.data = torch.tensor(
                     x[first_idx:last_idx].reshape(shape)
                     if x0 is None else
                     (1 - step_size) * x0[first_idx:last_idx].reshape(shape) + step_size * x[first_idx:last_idx].reshape(
-                        shape)
+                        shape), dtype=torch.float
                 )
             elif self.acceleration_type == 'anderson':
-                param.data = torch.as_tensor(
+                param.data = torch.tensor(
                     x[first_idx:last_idx].reshape(shape)
                     if x0 is None else
                     x0[first_idx:last_idx].reshape(shape) - step_size * x[first_idx:last_idx].reshape(
-                        shape)
+                        shape), dtype=torch.float
                 )
 
 
