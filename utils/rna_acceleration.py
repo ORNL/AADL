@@ -39,7 +39,7 @@ def rna(X, reg=0):
     return extr, c
 
 
-def min_eignevalRR(X):
+def min_eigenvalRR(X):
     # Recovers parameters, ensure X is a matrix
     (d, k) = np.shape(X)
     k = k - 1
