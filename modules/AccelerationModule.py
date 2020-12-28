@@ -70,7 +70,7 @@ class AccelerationModule(object):
                         shape)
                 )
             elif self.acceleration_type == 'anderson':
-                param.data = torch.FloatTensor(
+                param.data = torch.as_tensor(
                     x[first_idx:last_idx].reshape(shape)
                     if x0 is None else
                     x0[first_idx:last_idx].reshape(shape) - step_size * x[first_idx:last_idx].reshape(
