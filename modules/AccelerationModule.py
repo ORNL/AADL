@@ -8,13 +8,13 @@ import anderson_acceleration as anderson
 
 
 class AccelerationModule(object):
-    def __init__(self, acceleration_type: str, model: torch.nn.Module, history_depth: int = 15, reg_acc: float = 1e-5, store_each: int = 1):
+    def __init__(self, acceleration_type: str, model: torch.nn.Module, history_depth: int = 15, reg_acc: float = 1e-5, store_each_nth: int = 1):
         """
 
         :param model: :type torch.nn.Module
         :param history_depth: :type int
         :param reg_acc: :type float
-        :param store_each: :type int
+        :param store_each_nth: :type int
         """
         self.acceleration_type = acceleration_type.lower()
         self.store_counter = 0
@@ -23,7 +23,7 @@ class AccelerationModule(object):
         self.history_depth = history_depth
         self.reg_acc = reg_acc
         self.input_shape = dict()
-        self.store_each = store_each
+        self.store_each_nth = store_each_nth
 
         key = 0
         for param in model.parameters():
@@ -43,7 +43,7 @@ class AccelerationModule(object):
 
     def store(self, model):
         self.store_counter += 1
-        if self.store_counter >= self.store_each:
+        if self.store_counter >= self.store_each_nth:
             self.store_counter = 0  # reset and continue
         else:
             return  # don't store

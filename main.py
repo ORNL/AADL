@@ -29,10 +29,10 @@ Options:
   --threshold                 Stopping criterion for the training
   --batch                     Size of the batch for the optimizer
   -p, --penalization=<f>      Weight decay for the L2 penalization during the training of the neural network [default: 0.0]
-  -d, --depth=<m>             Depth of window history for anderson [default: 5]
+  -d, --history_depth=<m>             Depth of window history for anderson [default: 5]
   -w, --wait_iterations=<n>   Wait an initial number of classic optimizer iterations before starting with anderson [default: 1]
   -f, --frequency=<n>         Number of epochs performed between two consecutive anderson accelerations [default: 1]
-  -s, --store_each=<n>        Number of epochs performed between two consecutive storages of the iterations in the columns of matrix R to perform least squares [default: 1]
+  -s, --store_each_nth=<n>        Number of epochs performed between two consecutive storages of the iterations in the columns of matrix R to perform least squares [default: 1]
   -r, --regularization=<f>    Regularization parameter for L2 penalization for the least squares problem solved to perform anderson acceleration [default: 0.0]
 """
 
@@ -115,9 +115,9 @@ if __name__ == '__main__':
 
     # Parameters for RNA optimizer
     wait_iterations = int(config['wait_iterations'])
-    history_depth = int(config['depth'])
+    history_depth = int(config['history_depth'])
     frequency = int(config['frequency'])
-    store_each = int(config['store_each'])
+    store_each_nth = int(config['store_each_nth'])
     reg_acc = float(config['regularization'])
 
     # Import data
@@ -162,7 +162,7 @@ if __name__ == '__main__':
     training_classic_loss_history = optimizer_classic.train(epochs, threshold, batch_size)
 
     optimizer_anderson = DeterministicAcceleration(dataloader, 'anderson', learning_rate, 0.1, weight_decay, wait_iterations, history_depth, frequency,
-                                          reg_acc, store_each)
+                                          reg_acc, store_each_nth)
 
     optimizer_anderson.import_model(model_anderson)
     optimizer_anderson.set_loss_function(loss_function_name)
