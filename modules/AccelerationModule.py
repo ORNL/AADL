@@ -73,7 +73,7 @@ class AccelerationModule(object):
                 param.data = torch.tensor(
                     x[first_idx:last_idx].reshape(shape)
                     if x0 is None else
-                    x0[first_idx:last_idx].reshape(shape) - step_size * x[first_idx:last_idx].reshape(
+                    x0[first_idx:last_idx].reshape(shape) + step_size * x[first_idx:last_idx].reshape(
                         shape), dtype=torch.float
                 )
 

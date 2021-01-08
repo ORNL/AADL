@@ -49,7 +49,7 @@ def neural_network_linear_regression_anderson(slope, intercept, num_points, opti
     activation = None
     weight_decay = 0.0
     learning_rate = 1e-3
-    relaxation = 1e-2
+    relaxation = 1e-1
     weight_decay = 0.0    
     batch_size = 1
     epochs = 100000
