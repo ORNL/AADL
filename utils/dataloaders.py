@@ -103,7 +103,7 @@ def mnist_data(subsample_factor, rand_rotation=False, max_degree=90):
     out_dir = '{}/datasets'.format(os.getcwd())
     input_dim = (1, 28, 28)
     output_dim = int(10)
-    train_dataset = datasets.MNIST(oot=out_dir, train=True, transform=compose, download=True)
+    train_dataset = datasets.MNIST(root=out_dir, train=True, transform=compose, download=True)
     test_dataset = datasets.MNIST(root=out_dir, train=False, transform=compose, download=True)
 
     return input_dim, output_dim, train_dataset, test_dataset
