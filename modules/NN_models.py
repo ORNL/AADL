@@ -146,7 +146,7 @@ class MLP(NeuralNetwork, ABC):
 
         # Activation function for classification problem
         if classification:
-            self.layers += [torch.nn.Softmax()]
+            self.layers += [torch.nn.LogSoftmax()]
 
         # Multilayer perceptron
         self.model = torch.nn.Sequential(*self.layers)
@@ -224,7 +224,7 @@ class CNN2D(NeuralNetwork, ABC):
                             bias=self.use_bias)]
 
         # Activation function for classification problem
-        self.layers += [torch.nn.Softmax()]
+        self.layers += [torch.nn.LogSoftmax()]
 
         # Convolutional neural network
         self.model = torch.nn.Sequential(*self.layers)
