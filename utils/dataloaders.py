@@ -1,9 +1,33 @@
 import os
 import numpy
 import torch
+import random
 from torch.utils.data import Dataset
 from GraduateAdmission import GraduateAdmission
 from torchvision import transforms, datasets
+from torch.utils.data.sampler import SubsetRandomSampler
+
+
+def get_indices_regression(dataset, subset_portion):
+    num_elements= int(subset_portion * (len(dataset.targets) ))
+    indices = random.sample(list(range(0,len(dataset.targets))), num_elements)
+    return indices
+
+
+def get_indices_classification(dataset, subset_portion):
+    indices = []
+    num_classes = len(dataset.classes)
+    num_elements_per_class = int(subset_portion * (len(dataset.targets) / num_classes))
+
+    for j in range(num_classes):
+        indices_class = []
+        for i in range(len(dataset.targets)):
+            if dataset.targets[i] == j:
+                indices_class.append(i)
+        subset = random.sample(indices_class, num_elements_per_class)
+        indices.extend(subset)
+
+    return indices
 
 
 ###############################################################################
@@ -21,6 +45,7 @@ def linear_regression(slope, intercept, n: int = 10):
 
     return x_train, y_train
 
+
 class LinearData(Dataset):
     def __init__(self, slope, intercept, num_points: int = 10):
         super(LinearData, self).__init__()
@@ -31,17 +56,16 @@ class LinearData(Dataset):
             transform (callable, optional): Optional transform to be applied
                 on a sample.
         """
-        
+
         self.slope = slope
-        self.intercept = intercept        
+        self.intercept = intercept
         self.num_points = num_points
-        
+
         x_sample, y_sample = linear_regression(self.slope, self.intercept, self.num_points)
 
         self.x_sample = x_sample
         self.y_values = y_sample
         self.y_values = numpy.reshape(self.y_values, (len(self.y_values), 1))
-        
 
     def __len__(self):
         return self.y_values.shape[0]
@@ -61,69 +85,105 @@ class LinearData(Dataset):
 def linear_data(slope, intercept, num_points: int = 10):
     input_dim = 1
     output_dim = 1
-    return input_dim, output_dim, LinearData(slope, intercept, num_points = num_points)
+    return (input_dim,output_dim,LinearData(slope, intercept, num_points=num_points))
 
 
 def graduate_admission_data():
     input_dim = 7
     output_dim = 1
-    return input_dim, output_dim, GraduateAdmission('graduate_admission.csv', './datasets/', transform=True)
+    return (input_dim,output_dim,GraduateAdmission('graduate_admission.csv', './datasets/', transform=True))
 
 
-def mnist_data(rand_rotation=False, max_degree=90):
+def mnist_data(subsample_factor, rand_rotation=False, max_degree=90):
     if rand_rotation == True:
-        compose = transforms.Compose(
-            [
-                transforms.Resize(28),
-                transforms.RandomRotation(max_degree),
-                transforms.ToTensor(),
-                transforms.Normalize((0.5,), (0.5,)),
-            ]
-        )
+        compose = transforms.Compose([transforms.Resize(28),transforms.RandomRotation(max_degree),transforms.ToTensor(),transforms.Normalize((0.5,), (0.5,))])
 
     else:
-        compose = transforms.Compose(
-            [
-                transforms.Resize(28),
-                transforms.ToTensor(),
-                transforms.Normalize((0.5,), (0.5,)),
-            ]
-        )
+        compose = transforms.Compose([transforms.Resize(28),transforms.ToTensor(),transforms.Normalize((0.5,), (0.5,))])
     out_dir = '{}/datasets'.format(os.getcwd())
     input_dim = (1, 28, 28)
     output_dim = int(10)
-    return input_dim, output_dim, datasets.MNIST(
-        root=out_dir, train=True, transform=compose, download=True
-    )
+    train_dataset = datasets.MNIST(oot=out_dir, train=True, transform=compose, download=True)
+    test_dataset = datasets.MNIST(root=out_dir, train=False, transform=compose, download=True)
+
+    return input_dim, output_dim, train_dataset, test_dataset
 
 
-def cifar10_data():
-    compose = transforms.Compose(
-        [
-            transforms.Resize(32),
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-        ]
-    )
+def cifar10_data(subsample_factor, rand_rotation=False, max_degree=90):
+    if rand_rotation == True:
+        compose = transforms.Compose([transforms.Resize(32),transforms.RandomRotation(max_degree),transforms.ToTensor(),transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    else:
+        compose = transforms.Compose([transforms.Resize(32),transforms.ToTensor(),transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     out_dir = '{}/datasets'.format(os.getcwd())
     input_dim = (3, 32, 32)
     output_dim = int(10)
-    return input_dim, output_dim, datasets.CIFAR10(
-        root=out_dir, train=True, transform=compose, download=True
-    )
+    train_dataset = datasets.CIFAR10(root=out_dir, train=True, transform=compose, download=True)
+    test_dataset = datasets.CIFAR10(root=out_dir, train=False, transform=compose, download=True)
+
+    return input_dim, output_dim, train_dataset, test_dataset
 
 
-def cifar100_data():
-    compose = transforms.Compose(
-        [
-            transforms.Resize(32),
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-        ]
-    )
+def cifar100_data(subsample_factor, rand_rotation=False, max_degree=90):
+    if rand_rotation == True:
+        compose = transforms.Compose([transforms.Resize(32),transforms.RandomRotation(max_degree),transforms.ToTensor(),transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    else:
+        compose = transforms.Compose([transforms.Resize(32),transforms.ToTensor(),transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     out_dir = '{}/datasets'.format(os.getcwd())
     input_dim = (3, 32, 32)
-    output_dim = 1       
-    return input_dim, output_dim, datasets.CIFAR100(
-        root=out_dir, train=True, transform=compose, download=True
-    )
+    output_dim = int(100)
+    train_dataset = datasets.CIFAR100(root=out_dir, train=True, transform=compose, download=True)
+    test_dataset = datasets.CIFAR100(root=out_dir, train=False, transform=compose, download=True)
+
+    return input_dim, output_dim, train_dataset, test_dataset
+
+
+def generate_dataloaders(dataset_name, subsample_factor, batch_size):
+    
+    dataset_found = False
+    
+    if dataset_name == 'graduate_admission':
+        
+        dataset_found = True
+        
+        random_seed = 42
+        input_dim, output_dim, dataset = graduate_admission_data()
+        dataset_size = len(dataset)
+        indices = list(range(dataset_size))
+        validation_split = 0.2
+        split = int(numpy.floor(validation_split * dataset_size))
+        numpy.random.seed(random_seed)
+        numpy.random.shuffle(indices)
+        train_indices, val_indices = indices[split:], indices[:split]
+
+        train_sampler = SubsetRandomSampler(train_indices)
+        valid_sampler = SubsetRandomSampler(val_indices)
+
+        training_dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, sampler=train_sampler)
+        validation_dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, sampler=valid_sampler)
+    
+    else:
+        if dataset_name == 'mnist':
+            
+            dataset_found = True         
+            (input_dim,output_dim,training_dataset,validation_dataset) = mnist_data(subsample_factor)
+    
+    
+        elif dataset_name == 'cifar10':
+            
+            dataset_found = True  
+            (input_dim,output_dim,training_dataset,validation_dataset) = cifar10_data(subsample_factor)
+                
+        elif dataset_name == 'cifar100':
+            
+            dataset_found = True
+            (input_dim,output_dim,training_dataset,validation_dataset) = cifar100_data(subsample_factor)
+    
+        idx_train = get_indices_regression(training_dataset, subsample_factor)
+        idx_test = get_indices_regression(validation_dataset, subsample_factor)
+        
+        training_dataloader = torch.utils.data.DataLoader(training_dataset,batch_size,sampler=torch.utils.data.sampler.SubsetRandomSampler(idx_train))
+        validation_dataloader = torch.utils.data.DataLoader(validation_dataset,batch_size,sampler=torch.utils.data.sampler.SubsetRandomSampler(idx_test))
+             
+    assert dataset_found, "Dataset not found"
+     
+    return input_dim, output_dim, training_dataloader, validation_dataloader
