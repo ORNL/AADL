@@ -6,8 +6,8 @@ Created on Fri Dec  4 11:52:48 2020
 @author: 7ml
 """
 
+import math
 import numpy as np
-from numpy import linalg as LA
 
 
 def anderson(X, reg=0):
@@ -15,7 +15,7 @@ def anderson(X, reg=0):
     # Take a matrix X of iterates, where X[:,i] is the difference between the {i+1}th and the ith iterations of the
     # fixed-point operation
     #   x_i = g(x_{i-1})
-    #   
+    #
     #   r_i = x_{i+1} - x_i
     #   X[:,i] = r_i
     #
@@ -32,44 +32,44 @@ def anderson(X, reg=0):
     DX = np.diff(X)
     DR = np.diff(DX)
 
-    projected_residual = np.matmul(DR.T, DX[:,k-1])
-    DX = DX[:,:-1]
-
-    # "Square" the matrix, and normalize it
-    RR = np.matmul(np.transpose(DR), DR)
+    projected_residual = DX[:, k - 1]
+    DX = DX[:, :-1]
 
     # Solve (R'R + lambda I)z = 1
-    (extr, c) = anderson_precomputed(DX, RR, projected_residual, reg)
+    (extr, c) = anderson_precomputed(DX, DR, projected_residual, reg)
 
     # Compute the extrapolation / weigthed mean  "sum_i c_i x_i", and return
     return extr, c
 
 
-def anderson_precomputed(DX, RR, residual, reg=0):
+def anderson_precomputed(DX, DR, residual, reg=0):
     # Regularized Nonlinear Acceleration, with RR precomputed
     # Same than rna, but RR is computed only once
 
     # Recovers parameters
     (d, k) = DX.shape
+   
+    RR = np.matmul(np.transpose(DR), DR)
+    
+    if math.sqrt(np.linalg.cond(RR, 'fro')) < 1e5:
 
-    # Solve (R'R + lambda I)z = 1
-    reg_I = reg * np.eye(k)
-
-    # In case of singular matrix, we solve using least squares instead
-    try:
-        z = np.linalg.solve(RR + reg_I, residual)
-    except LA.linalg.LinAlgError:
-        z = np.linalg.lstsq(RR+reg_I, residual, -1)
+        # In case of singular matrix, we solve using least squares instead
+        q, r = np.linalg.qr(DR)   
+        
+        new_residual = np.matmul(np.transpose(q), residual)      
+        z = np.linalg.lstsq(r, new_residual, reg)
         z = z[0]
-
-    # Recover weights c, where sum(c) = 1
-    if np.abs(np.sum(z)) < 1e-10:
-        z = np.ones((k,1))
-
-    alpha = np.asmatrix(z / np.sum(z))
-
+        
+        # Recover weights c, where sum(c) = 1
+        if np.abs(np.sum(z)) < 1e-10:
+            z = np.ones((k, 1))
+    
+        alpha = np.asmatrix(z / np.sum(z))
+        
+    else:
+        
+        alpha  = np.zeros((DX.shape[1],1))
+        
     # Compute the extrapolation / weigthed mean  "sum_i c_i x_i", and return
     extr = np.matmul(DX, alpha)
     return np.array(extr), alpha
-
-

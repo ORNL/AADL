@@ -14,6 +14,7 @@ from optimizers import FixedPointIteration, DeterministicAcceleration
 
 ###############################################################################
 
+
 def neural_network_linear_regression(slope, intercept, num_points, optimizer_str):
     inputDim, outputDim, dataset = dataloaders.linear_data(slope, intercept, num_points)
     num_neurons_list = [1]
@@ -26,19 +27,20 @@ def neural_network_linear_regression(slope, intercept, num_points, optimizer_str
     epochs = 10000
     threshold = 1e-8
 
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size)
+    training_dataloader = torch.utils.data.DataLoader(dataset, batch_size)
+    validation_dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
-    model = MLP(inputDim, outputDim, num_neurons_list, use_bias, activation, classification_problem)
+    model = MLP(inputDim,outputDim,num_neurons_list,use_bias,activation,classification_problem)
 
-    optimizer_classic = FixedPointIteration(dataloader, learning_rate, weight_decay, )
+    optimizer_classic = FixedPointIteration(training_dataloader, validation_dataloader,learning_rate, weight_decay)
     optimizer_classic.import_model(model)
     optimizer_classic.set_loss_function('mse')
     optimizer_classic.set_optimizer(optimizer_str)
-    training_classic_loss_history = optimizer_classic.train(epochs, threshold, batch_size)
+    training_classic_loss_history, validation_classic_loss_history = optimizer_classic.train(epochs, threshold, batch_size)
 
     weights = list(model.get_model().parameters())
 
-    return weights, training_classic_loss_history
+    return weights, validation_classic_loss_history
 
 
 def neural_network_linear_regression_anderson(slope, intercept, num_points, optimizer_str):
@@ -49,34 +51,33 @@ def neural_network_linear_regression_anderson(slope, intercept, num_points, opti
     activation = None
     weight_decay = 0.0
     learning_rate = 1e-3
-    relaxation = 1e-2
-    weight_decay = 0.0    
+    relaxation = 1e-1
+    weight_decay = 0.0
     batch_size = 1
-    epochs = 100000
+    epochs = 10000
     threshold = 1e-8
     wait_iterations = 1
     history_depth = 100
     frequency = 1
     reg_acc = 1e-9
     store_each_nth = 1
-        
 
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size)
+    training_dataloader = torch.utils.data.DataLoader(dataset, batch_size)
+    validation_dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
-    model = MLP(inputDim, outputDim, num_neurons_list, use_bias, activation, classification_problem)
-
-    optimizer_anderson = DeterministicAcceleration(dataloader, 'anderson', learning_rate, relaxation, weight_decay, wait_iterations, history_depth,
-                                          frequency,
-                                          reg_acc, store_each_nth)
+    model = MLP(inputDim,outputDim,num_neurons_list,use_bias,activation,classification_problem)
+    optimizer_anderson = DeterministicAcceleration(training_dataloader,validation_dataloader,'anderson',learning_rate,relaxation,weight_decay,wait_iterations,history_depth,
+                                                   frequency,reg_acc,store_each_nth)
     optimizer_anderson.import_model(model)
     optimizer_anderson.set_loss_function('mse')
     optimizer_anderson.set_optimizer(optimizer_str)
-    training_classic_loss_history = optimizer_anderson.train(epochs, threshold, batch_size)
+    training_anderson_loss_history, validation_anderson_loss_history = optimizer_anderson.train(
+        epochs, threshold, batch_size
+    )
 
     weights = list(model.get_model().parameters())
 
-    return weights, training_classic_loss_history
-
+    return weights, validation_anderson_loss_history
 
 
 def test_neural_network_linear_regression(optimizer):
@@ -85,7 +86,7 @@ def test_neural_network_linear_regression(optimizer):
     slope = straight_line_parameters[0].item()
     intercept = straight_line_parameters[1].item()
     numeric_weights, history = neural_network_linear_regression(slope, intercept, num_points, optimizer)
-    assert( history[-1].item()<1e-8 )
+    assert history[-1] < 1e-7
 
 
 def test_neural_network_linear_regression_anderson(optimizer):
@@ -94,36 +95,34 @@ def test_neural_network_linear_regression_anderson(optimizer):
     slope = straight_line_parameters[0].item()
     intercept = straight_line_parameters[1].item()
     numeric_weights, history = neural_network_linear_regression_anderson(slope, intercept, num_points, optimizer)
-    assert( history[-1].item()<1e-8 )
+    assert history[-1] < 1e-7
 
 
 ###############################################################################
 
 
 class TestLinearRegression(unittest.TestCase):
-
     def test_neural_network_linear_regression_sgd(self):
-            test_neural_network_linear_regression('sgd')
-    
+        test_neural_network_linear_regression('sgd')
+
     def test_neural_network_linear_regression_rmsprop(self):
-            test_neural_network_linear_regression('rmsprop')
-            
+        test_neural_network_linear_regression('rmsprop')
+
     def test_neural_network_linear_regression_adam(self):
-            test_neural_network_linear_regression('adam') 
-            
+        test_neural_network_linear_regression('adam')
+
     def test_neural_network_linear_regression_sgd_anderson(self):
-            test_neural_network_linear_regression_anderson('sgd')
-    
+        test_neural_network_linear_regression_anderson('sgd')
+
     def test_neural_network_linear_regression_rmsprop_andserson(self):
-            test_neural_network_linear_regression_anderson('rmsprop')
-            
+        test_neural_network_linear_regression_anderson('rmsprop')
+
     def test_neural_network_linear_regression_adam_anderson(self):
-            test_neural_network_linear_regression_anderson('adam')             
-    
+        test_neural_network_linear_regression_anderson('adam')
+
 
 ###############################################################################
 
 
 if __name__ == "__main__":
     unittest.main()
-
