@@ -1,75 +1,37 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Dec  4 11:52:48 2020
 
-@author: 7ml
-"""
+import torch
 
-import math
-import numpy as np
-
-
-def anderson(X, reg=0):
+def anderson(X, relaxation=1.0):
     # Anderson Acceleration
-    # Take a matrix X of iterates, where X[:,i] is the difference between the {i+1}th and the ith iterations of the
-    # fixed-point operation
-    #   x_i = g(x_{i-1})
-    #
-    #   r_i = x_{i+1} - x_i
-    #   X[:,i] = r_i
-    #
-    # reg is the regularization parameter used for solving the system
-    #   (F'F + reg I)z = r_{i+1}
-    # where F is the matrix of differences in the residual, i.e. R[:,i] = r_{i+1}-r_{i}
+    # Take a matrix X of iterates such that X[:,i] = g(X[:,i-1])
+    # Return acceleration for X[:,-1]
 
-    # Recovers parameters, ensure X is a matrix
-    (d, k) = np.shape(X)
-    k = k - 1
-    X = np.asmatrix(X)  # check if necessary
+    assert X.ndim==2, "X must be a matrix"
 
-    # Compute the matrix of residuals
-    DX = np.diff(X)
-    DR = np.diff(DX)
+    # Compute residuals
+    DX =  X[:,1:] -  X[:,:-1] # DX[:,i] =  X[:,i+1] -  X[:,i]
+    DR = DX[:,1:] - DX[:,:-1] # DR[:,i] = DX[:,i+1] - DX[:,i] = X[:,i+2] - 2*X[:,i+1] + X[:,i]
 
-    projected_residual = DX[:, k - 1]
-    DX = DX[:, :-1]
+    # # use QR factorization
+    # q, r = torch.qr(DR)
+    # gamma, _ = torch.triangular_solve( (q.t()@DX[:,-1]).unsqueeze(1), r )
+    # gamma = gamma.squeeze(1)
 
-    # Solve (R'R + lambda I)z = 1
-    (extr, c) = anderson_precomputed(DX, DR, projected_residual, reg)
+    # solve unconstrained least-squares problem
+    gamma, _ = torch.lstsq( DX[:,-1].unsqueeze(1), DR )
+    gamma = gamma.squeeze(1)[:DR.size(1)]
 
-    # Compute the extrapolation / weigthed mean  "sum_i c_i x_i", and return
-    return extr, c
+    # compute acceleration
+    extr = X[:,-2] + DX[:,-1] - (DX[:,:-1]+DR)@gamma
 
+    if relaxation!=1:
+        assert relaxation>0, "relaxation must be positive"
+        # compute solution of the contraint optimization problem s.t. gamma = X[:,1:]@alpha
+        alpha = torch.zeros(gamma.numel()+1)
+        alpha[0]    = gamma[0]
+        alpha[1:-1] = gamma[1:] - gamma[:-1]
+        alpha[-1]   = 1 - gamma[-1]
+        extr = relaxation*extr + (1-relaxation)*X[:,:-1]@alpha
 
-def anderson_precomputed(DX, DR, residual, reg=0):
-    # Regularized Nonlinear Acceleration, with RR precomputed
-    # Same than rna, but RR is computed only once
-
-    # Recovers parameters
-    (d, k) = DX.shape
-   
-    RR = np.matmul(np.transpose(DR), DR)
-    
-    if math.sqrt(np.linalg.cond(RR, 'fro')) < 1e5:
-
-        # In case of singular matrix, we solve using least squares instead
-        q, r = np.linalg.qr(DR)   
-        
-        new_residual = np.matmul(np.transpose(q), residual)      
-        z = np.linalg.lstsq(r, new_residual, reg)
-        z = z[0]
-        
-        # Recover weights c, where sum(c) = 1
-        if np.abs(np.sum(z)) < 1e-10:
-            z = np.ones((k, 1))
-    
-        alpha = np.asmatrix(z / np.sum(z))
-        
-    else:
-        
-        alpha  = np.zeros((DX.shape[1],1))
-        
-    # Compute the extrapolation / weigthed mean  "sum_i c_i x_i", and return
-    extr = np.matmul(DX, alpha)
-    return np.array(extr), alpha
+    return extr
