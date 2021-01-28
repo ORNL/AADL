@@ -86,7 +86,6 @@ class FixedPointIteration(object):
 
             # Training
             for batch_idx, (data, target) in enumerate(self.training_dataloader):
-                self.accelerate()
                 data, target = (data.to(self.model.get_device()),target.to(self.model.get_device()))
                 self.optimizer.zero_grad()
                 output = self.model.forward(data)
@@ -111,6 +110,7 @@ class FixedPointIteration(object):
 
             train_loss = loss.item()
             self.training_loss_history.append(train_loss)
+            self.accelerate()
 
             # Validation
             with torch.no_grad():

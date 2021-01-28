@@ -54,6 +54,7 @@ sys.path.append("./modules")
 from modules.NN_models import MLP, CNN2D
 from modules.optimizers import FixedPointIteration, DeterministicAcceleration
 from utils.dataloaders import generate_dataloaders
+from utils.gpu_detection import count_gpu, get_gpu
 
 plt.rcParams.update({'font.size': 16})
 
@@ -131,6 +132,11 @@ if __name__ == '__main__':
     reg_acc = float(config['regularization'])
     relaxation = float(config['relaxation'])
 
+    # The only reason why I do this workaround (not necessary now) is because
+    # I am thinking to the situation where one MPI process has multiple gpus available
+    # In that case, the argument passed to get_gpu may be a numberID > 0
+    available_device = get_gpu(0)
+
     # Generate dataloaders for training and validation
     (
         input_dim,
@@ -148,6 +154,7 @@ if __name__ == '__main__':
             use_bias,
             activation,
             classification_problem,
+            available_device
         )
     elif model_name == 'cnn':
         model_classic = CNN2D(
@@ -157,6 +164,7 @@ if __name__ == '__main__':
             use_bias,
             activation,
             classification_problem,
+            available_device
         )
     else:
         raise RuntimeError('Model type not recognized')
@@ -238,7 +246,7 @@ if __name__ == '__main__':
         plt.legend()
         plt.draw()
         plt.savefig('training_loss_plot')
-        
+
         plt.figure(2)
         plt.plot(
             epochs1,

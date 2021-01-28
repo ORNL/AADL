@@ -20,7 +20,7 @@ def activation_function(name_activation):
 class NeuralNetwork(torch.nn.Module, metaclass=ABCMeta):
 
     def __init__(self, input_dim: int, output_dim: int, num_neurons_list: list, use_bias: bool, activation: str,
-                 classification: bool, device='cpu'):
+                 classification: bool, device=torch.device('cpu')):
         """
 
         :param input_dim: :type int
@@ -32,7 +32,8 @@ class NeuralNetwork(torch.nn.Module, metaclass=ABCMeta):
         """
         super().__init__()
 
-        self.device = torch.device(device)
+        assert isinstance(device, torch.device)
+        self.device = device
 
         assert isinstance(input_dim, int) or isinstance(input_dim, tuple)
         self.input_dim = input_dim
@@ -151,6 +152,9 @@ class MLP(NeuralNetwork, ABC):
         # Multilayer perceptron
         self.model = torch.nn.Sequential(*self.layers)
 
+        # map the constructed model to the device it is assigned to
+        self.model.to(self.device)
+
 
 class CNN2D(NeuralNetwork, ABC):
 
@@ -163,7 +167,8 @@ class CNN2D(NeuralNetwork, ABC):
         :param num_neurons_list: :type list
         :param use_bias: :type bool
         """
-        super(CNN2D, self).__init__(input_dim, output_dim, num_neurons_list, use_bias, activation, classification, device,
+        super(CNN2D, self).__init__(input_dim, output_dim, num_neurons_list, use_bias, activation, classification,
+                                    device,
                                     **kwargs)
 
         self.kernel_size_list = kwargs.get("kernel_size_list", None)
@@ -228,3 +233,6 @@ class CNN2D(NeuralNetwork, ABC):
 
         # Convolutional neural network
         self.model = torch.nn.Sequential(*self.layers)
+
+        # map the constructed model to the device it is assigned to
+        self.model.to(self.device)
