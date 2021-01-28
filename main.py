@@ -7,14 +7,15 @@
 
 Usage:
   main.py (-h | --help)
-  main.py [-c CONFIG_FILE] [--verbose] [--display] [--dataset] [--subsample] [--classification] [--model] [--neurons] [--layers] [-a ACTIVATION] [-b BIAS]
+  main.py [-c CONFIG_FILE] [--number_runs] [--verbose] [--display] [--dataset] [--subsample] [--classification] [--model] [--neurons] [--layers] [-a ACTIVATION] [-b BIAS]
           [--optimizer] [-e EPOCHS] [-l LEARNING_RATE] [--threshold] [--batch] [-p PENALIZATION] [--acceleration] [-d DEPTH] [-w WAIT_ITERATIONS] [-f FREQUENCY]
           [-s STORE_EACH] [-r REGULARIZATION] [--relaxation]
 
 Options:
   -h, --help                  Show this screen
+  --number_runs               Number of runs, each one using a different fixed random seed
   --version                   Show version
-  --verbose                   Show version
+  --verbose                   Level of verbosity
   --display                   Use matplotlib to plot results
   -c, --config=<str>          Filename containing configuration parameters
   --dataset                   Dataset used for training. GRADUATE_ADMISSION, MNIST, CIFAR10 [default: MNIST]
@@ -56,6 +57,7 @@ from modules.optimizers import FixedPointIteration, DeterministicAcceleration
 from utils.dataloaders import generate_dataloaders
 from matplotlib.pyplot import cm
 import numpy
+from utils.gpu_detection import get_gpu
 
 plt.rcParams.update({'font.size': 16})
 
@@ -100,6 +102,7 @@ def get_options():
 if __name__ == '__main__':
     config = get_options()
 
+    number_runs = int(config['number_runs'])
     verbose = bool(config['verbose'])
     classification_problem = bool(config['classification'])
 
@@ -132,6 +135,11 @@ if __name__ == '__main__':
     reg_acc = float(config['regularization'])
     relaxation = float(config['relaxation'])
 
+    # The only reason why I do this workaround (not necessary now) is because
+    # I am thinking to the situation where one MPI process has multiple gpus available
+    # In that case, the argument passed to get_gpu may be a numberID > 0
+    available_device = get_gpu(0)
+
     # Generate dataloaders for training and validation
     (
         input_dim,
@@ -140,22 +148,22 @@ if __name__ == '__main__':
         validation_dataloader,
     ) = generate_dataloaders(dataset_name, subsample_factor, batch_size)
 
-    n_iter = 4
-    color = cm.rainbow(numpy.linspace(0, 1, n_iter))
+    color = cm.rainbow(numpy.linspace(0, 1, number_runs))
 
-    for iteration in range(0, n_iter):
+    for iteration in range(0, number_runs):
 
         torch.manual_seed(iteration)
 
         # Define deep learning model
         if model_name == 'mlp':
-            model_classic = MLP(
+             model_classic = MLP(
                 input_dim,
                 output_dim,
                 num_neurons_list,
                 use_bias,
                 activation,
                 classification_problem,
+                available_device
             )
         elif model_name == 'cnn':
             model_classic = CNN2D(
@@ -165,6 +173,7 @@ if __name__ == '__main__':
                 use_bias,
                 activation,
                 classification_problem,
+                available_device
             )
         else:
             raise RuntimeError('Model type not recognized')
@@ -224,30 +233,6 @@ if __name__ == '__main__':
         if config['display']:
             epochs1 = range(1, len(training_classic_loss_history) + 1)
             epochs2 = range(1, len(training_anderson_loss_history) + 1)
-            """
-            plt.figure(1)
-            plt.plot(
-                epochs1,
-                training_classic_loss_history,
-                color='b',
-                linestyle='-',
-                label='training loss - Fixed Point',
-            )
-            plt.plot(
-                epochs2,
-                training_anderson_loss_history,
-                color='r',
-                linestyle='-',
-                label='training loss - Anderson',
-            )
-            plt.yscale('log')
-            plt.title('Training loss function')
-            plt.xlabel('Epochs')
-            plt.ylabel('Loss')
-            plt.legend()
-            plt.draw()
-            plt.savefig('training_loss_plot')
-            """
             #plt.figure(2)
             plt.plot(
                 epochs1,
@@ -267,7 +252,7 @@ if __name__ == '__main__':
             plt.title('Validation loss function')
             plt.xlabel('Epochs')
             plt.ylabel('Loss')
-            plt.legend()
+            #plt.legend()
             plt.draw()
             plt.savefig('validation_loss_plot')
 

@@ -121,10 +121,7 @@ class FixedPointIteration(object):
 
                 for batch_idx, (data, target) in enumerate(self.validation_dataloader):
                     count_val = count_val + 1
-                    data, target = (
-                        data.to(self.model.get_device()),
-                        target.to(self.model.get_device()),
-                    )
+                    data, target = (data.to(self.model.get_device()),target.to(self.model.get_device()))
                     output = self.model.forward(data)
                     loss = self.criterion(output, target)
                     val_loss = val_loss + loss
