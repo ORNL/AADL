@@ -265,4 +265,4 @@ def generate_dataloaders(dataset_name, subsample_factor, batch_size):
 
     assert dataset_found, "Dataset not found"
 
-    return input_dim, output_dim, training_dataloader, validation_dataloader
+    return (input_dim,output_dim,training_dataloader,validation_dataloader)
