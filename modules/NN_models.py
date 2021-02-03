@@ -12,6 +12,8 @@ def activation_function(name_activation):
         return torch.nn.Softmax()
     elif name_activation == 'tanh':
         return torch.nn.Tanh()
+    elif name_activation == 'leakyrelu':
+        return torch.nn.LeakyReLU(1e-2)
     else:
         raise ValueError("Activation function not recognized")
 
