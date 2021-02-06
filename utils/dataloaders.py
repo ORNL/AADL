@@ -142,7 +142,7 @@ class NonLinearData(Dataset):
 def nonlinear_data(num_points: int = 10):
     input_dim = 1
     output_dim = 1
-    return input_dim, output_dim, NonLinearData(slope, intercept, num_points=num_points)
+    return input_dim, output_dim, NonLinearData(num_points=num_points)
 
 
 ###############################################################################
