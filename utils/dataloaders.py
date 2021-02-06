@@ -120,7 +120,7 @@ class NonLinearData(Dataset):
         self.intercept = intercept
         self.num_points = num_points
 
-        x_sample, y_sample = nonlinear_regression(self.slope, self.intercept, self.num_points)
+        x_sample, y_sample = nonlinear_regression(self.num_points)
 
         self.x_sample = x_sample
         self.y_values = y_sample
