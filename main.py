@@ -7,14 +7,15 @@
 
 Usage:
   main.py (-h | --help)
-  main.py [-c CONFIG_FILE] [--verbose] [--display] [--dataset] [--subsample] [--classification] [--model] [--neurons] [--layers] [-a ACTIVATION] [-b BIAS]
+  main.py [-c CONFIG_FILE] [--number_runs] [--verbose] [--display] [--dataset] [--subsample] [--classification] [--model] [--neurons] [--layers] [-a ACTIVATION] [-b BIAS]
           [--optimizer] [-e EPOCHS] [-l LEARNING_RATE] [--threshold] [--batch] [-p PENALIZATION] [--acceleration] [-d DEPTH] [-w WAIT_ITERATIONS] [-f FREQUENCY]
           [-s STORE_EACH] [-r REGULARIZATION] [--relaxation]
 
 Options:
   -h, --help                  Show this screen
+  --number_runs               Number of runs, each one using a different fixed random seed
   --version                   Show version
-  --verbose                   Show version
+  --verbose                   Level of verbosity
   --display                   Use matplotlib to plot results
   -c, --config=<str>          Filename containing configuration parameters
   --dataset                   Dataset used for training. GRADUATE_ADMISSION, MNIST, CIFAR10 [default: MNIST]
@@ -54,9 +55,11 @@ sys.path.append("./modules")
 from modules.NN_models import MLP, CNN2D
 from modules.optimizers import FixedPointIteration, DeterministicAcceleration
 from utils.dataloaders import generate_dataloaders
+from matplotlib.pyplot import cm
+import numpy
+from utils.gpu_detection import get_gpu
 
 plt.rcParams.update({'font.size': 16})
-
 
 def merge_args(cmdline_args, config_args):
     for key in config_args.keys():
@@ -99,6 +102,7 @@ def get_options():
 if __name__ == '__main__':
     config = get_options()
 
+    number_runs = int(config['number_runs'])
     verbose = bool(config['verbose'])
     classification_problem = bool(config['classification'])
 
@@ -131,6 +135,11 @@ if __name__ == '__main__':
     reg_acc = float(config['regularization'])
     relaxation = float(config['relaxation'])
 
+    # The only reason why I do this workaround (not necessary now) is because
+    # I am thinking to the situation where one MPI process has multiple gpus available
+    # In that case, the argument passed to get_gpu may be a numberID > 0
+    available_device = get_gpu(0)
+
     # Generate dataloaders for training and validation
     (
         input_dim,
@@ -139,125 +148,80 @@ if __name__ == '__main__':
         validation_dataloader,
     ) = generate_dataloaders(dataset_name, subsample_factor, batch_size)
 
-    # Define deep learning model
-    if model_name == 'mlp':
-        model_classic = MLP(
-            input_dim,
-            output_dim,
-            num_neurons_list,
-            use_bias,
-            activation,
-            classification_problem,
-        )
-    elif model_name == 'cnn':
-        model_classic = CNN2D(
-            input_dim,
-            output_dim,
-            num_neurons_list,
-            use_bias,
-            activation,
-            classification_problem,
-        )
-    else:
-        raise RuntimeError('Model type not recognized')
+    color = cm.rainbow(numpy.linspace(0, 1, number_runs))
 
-    model_anderson = deepcopy(model_classic)
+    for iteration in range(0, number_runs):
 
-    # For classification problems, the loss function is the negative log-likelihood (nll)
-    # For regression problems, the loss function is the mean squared error (mse)
-    if classification_problem:
-        loss_function_name = 'nll'
-    else:
-        loss_function_name = 'mse'
+        torch.manual_seed(iteration)
 
-    # Define the standard optimizer which is used as point of reference to assess the improvement provided by the
-    # acceleration
-    optimizer_classic = FixedPointIteration(
-        training_dataloader,
-        validation_dataloader,
-        learning_rate,
-        weight_decay,
-        verbose,
-    )
+        # Define deep learning model
+        if model_name == 'mlp':
+             model_classic = MLP(input_dim,output_dim,num_neurons_list,use_bias,activation,classification_problem,available_device)
+        elif model_name == 'cnn':
+            model_classic = CNN2D(input_dim,output_dim,num_neurons_list,use_bias,activation,classification_problem,available_device)
+        else:
+            raise RuntimeError('Model type not recognized')
 
-    optimizer_classic.import_model(model_classic)
-    optimizer_classic.set_loss_function(loss_function_name)
-    optimizer_classic.set_optimizer(optimizer_name)
+        model_anderson = deepcopy(model_classic)
 
-    (
-        training_classic_loss_history,
-        validation_classic_loss_history,
-    ) = optimizer_classic.train(epochs, threshold, batch_size)
+        # For classification problems, the loss function is the negative log-likelihood (nll)
+        # For regression problems, the loss function is the mean squared error (mse)
+        loss_function_name = 'nll' if classification_problem else 'mse'
 
-    optimizer_anderson = DeterministicAcceleration(
-        training_dataloader,
-        validation_dataloader,
-        acceleration,
-        learning_rate,
-        relaxation,
-        weight_decay,
-        wait_iterations,
-        history_depth,
-        frequency,
-        reg_acc,
-        store_each_nth,
-        verbose,
-    )
+        # Define the standard optimizer which is used as point of reference to assess the improvement provided by the
+        # acceleration
+        optimizer_classic = FixedPointIteration(training_dataloader,validation_dataloader,learning_rate,weight_decay,verbose)
 
-    optimizer_anderson.import_model(model_anderson)
-    optimizer_anderson.set_loss_function(loss_function_name)
-    optimizer_anderson.set_optimizer(optimizer_name)
+        optimizer_classic.import_model(model_classic)
+        optimizer_classic.set_loss_function(loss_function_name)
+        optimizer_classic.set_optimizer(optimizer_name)
 
-    (
-        training_anderson_loss_history,
-        validation_anderson_loss_history,
-    ) = optimizer_anderson.train(epochs, threshold, batch_size)
-
-    if config['display']:
-        epochs1 = range(1, len(training_classic_loss_history) + 1)
-        epochs2 = range(1, len(training_anderson_loss_history) + 1)
-        plt.figure(1)
-        plt.plot(
-            epochs1,
+        (
             training_classic_loss_history,
-            color='b',
-            linestyle='-',
-            label='training loss - Fixed Point',
-        )
-        plt.plot(
-            epochs2,
-            training_anderson_loss_history,
-            color='r',
-            linestyle='-',
-            label='training loss - Anderson',
-        )
-        plt.yscale('log')
-        plt.title('Training loss function')
-        plt.xlabel('Epochs')
-        plt.ylabel('Loss')
-        plt.legend()
-        plt.draw()
-        plt.savefig('training_loss_plot')
-        
-        plt.figure(2)
-        plt.plot(
-            epochs1,
             validation_classic_loss_history,
-            color='b',
-            linestyle='-',
-            label='validation loss - Fixed Point',
+            validation_classic_accuracy_history,
+        ) = optimizer_classic.train(epochs, threshold, batch_size)
+
+        optimizer_anderson = DeterministicAcceleration(
+            training_dataloader,
+            validation_dataloader,
+            acceleration,
+            learning_rate,
+            relaxation,
+            weight_decay,
+            wait_iterations,
+            history_depth,
+            frequency,
+            reg_acc,
+            store_each_nth,
+            verbose,
         )
-        plt.plot(
-            epochs2,
+
+        optimizer_anderson.import_model(model_anderson)
+        optimizer_anderson.set_loss_function(loss_function_name)
+        optimizer_anderson.set_optimizer(optimizer_name)
+
+        (
+            training_anderson_loss_history,
             validation_anderson_loss_history,
-            color='r',
-            linestyle='-',
-            label='validation loss - Anderson',
-        )
-        plt.yscale('log')
-        plt.title('Validation loss function')
-        plt.xlabel('Epochs')
-        plt.ylabel('Loss')
-        plt.legend()
-        plt.draw()
-        plt.savefig('validation_loss_plot')
+            validation_anderson_accuracy_history,
+        ) = optimizer_anderson.train(epochs, threshold, batch_size)
+
+        if config['display']:
+            epochs1 = range(1, len(training_classic_loss_history) + 1)
+            epochs2 = range(1, len(training_anderson_loss_history) + 1)
+            if len(validation_classic_accuracy_history) > 0:
+                plt.plot(epochs1,validation_classic_accuracy_history,color=color[iteration],linestyle='-')
+                plt.plot(epochs2,validation_anderson_accuracy_history,color=color[iteration],linestyle='--')
+            else:
+                plt.plot(epochs1,validation_classic_loss_history,color=color[iteration],linestyle='-')
+                plt.plot(epochs2,validation_anderson_loss_history,color=color[iteration],linestyle='--')                
+            plt.yscale('log')
+            plt.title('Validation loss function')
+            plt.xlabel('Epochs')
+            plt.ylabel('Loss')
+            #plt.legend()
+            plt.draw()
+            plt.savefig('validation_loss_plot')
+
+            plt.tight_layout()

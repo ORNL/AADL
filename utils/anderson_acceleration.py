@@ -28,7 +28,7 @@ def anderson(X, relaxation=1.0):
     if relaxation!=1:
         assert relaxation>0, "relaxation must be positive"
         # compute solution of the contraint optimization problem s.t. gamma = X[:,1:]@alpha
-        alpha = torch.zeros(gamma.numel()+1)
+        alpha = torch.zeros(gamma.numel()+1).to(DX.device)
         alpha[0]    = gamma[0]
         alpha[1:-1] = gamma[1:] - gamma[:-1]
         alpha[-1]   = 1 - gamma[-1]
