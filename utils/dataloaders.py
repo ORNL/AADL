@@ -92,7 +92,7 @@ def linear_data(slope, intercept, num_points: int = 10):
 ###############################################################################
 
 
-def nonlinear_regression(slope, intercept, n: int = 10):
+def nonlinear_regression(n: int = 10):
     # create dummy data for training
     x_values = numpy.linspace(-1.0, +1.0, num=n)
     x_train = numpy.array(x_values, dtype=numpy.float32)
