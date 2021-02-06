@@ -106,7 +106,7 @@ def nonlinear_regression(n: int = 10):
 
 
 class NonLinearData(Dataset):
-    def __init__(self, slope, intercept, num_points: int = 10):
+    def __init__(self, num_points: int = 10):
         super(NonLinearData, self).__init__()
         """
         Args:
