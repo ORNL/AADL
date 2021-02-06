@@ -116,8 +116,6 @@ class NonLinearData(Dataset):
                 on a sample.
         """
 
-        self.slope = slope
-        self.intercept = intercept
         self.num_points = num_points
 
         x_sample, y_sample = nonlinear_regression(self.num_points)
