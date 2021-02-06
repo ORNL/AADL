@@ -139,7 +139,7 @@ class NonLinearData(Dataset):
         return x_sample, y_sample
 
 
-def nonlinear_data(slope, intercept, num_points: int = 10):
+def nonlinear_data(num_points: int = 10):
     input_dim = 1
     output_dim = 1
     return input_dim, output_dim, NonLinearData(slope, intercept, num_points=num_points)
