@@ -18,7 +18,7 @@ def count_gpus():
         number = torch.cuda.device_count()
         print(number, " - GPUs found")
     else:
-        print(number, " - GPU NOT found")
+        print("GPU NOT found")
     return number
 
 

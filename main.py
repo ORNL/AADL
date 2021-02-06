@@ -156,25 +156,9 @@ if __name__ == '__main__':
 
         # Define deep learning model
         if model_name == 'mlp':
-             model_classic = MLP(
-                input_dim,
-                output_dim,
-                num_neurons_list,
-                use_bias,
-                activation,
-                classification_problem,
-                available_device
-            )
+             model_classic = MLP(input_dim,output_dim,num_neurons_list,use_bias,activation,classification_problem,available_device)
         elif model_name == 'cnn':
-            model_classic = CNN2D(
-                input_dim,
-                output_dim,
-                num_neurons_list,
-                use_bias,
-                activation,
-                classification_problem,
-                available_device
-            )
+            model_classic = CNN2D(input_dim,output_dim,num_neurons_list,use_bias,activation,classification_problem,available_device)
         else:
             raise RuntimeError('Model type not recognized')
 
@@ -182,20 +166,11 @@ if __name__ == '__main__':
 
         # For classification problems, the loss function is the negative log-likelihood (nll)
         # For regression problems, the loss function is the mean squared error (mse)
-        if classification_problem:
-            loss_function_name = 'nll'
-        else:
-            loss_function_name = 'mse'
+        loss_function_name = 'nll' if classification_problem else 'mse'
 
         # Define the standard optimizer which is used as point of reference to assess the improvement provided by the
         # acceleration
-        optimizer_classic = FixedPointIteration(
-            training_dataloader,
-            validation_dataloader,
-            learning_rate,
-            weight_decay,
-            verbose,
-        )
+        optimizer_classic = FixedPointIteration(training_dataloader,validation_dataloader,learning_rate,weight_decay,verbose)
 
         optimizer_classic.import_model(model_classic)
         optimizer_classic.set_loss_function(loss_function_name)
@@ -204,6 +179,7 @@ if __name__ == '__main__':
         (
             training_classic_loss_history,
             validation_classic_loss_history,
+            validation_classic_accuracy_history,
         ) = optimizer_classic.train(epochs, threshold, batch_size)
 
         optimizer_anderson = DeterministicAcceleration(
@@ -228,26 +204,18 @@ if __name__ == '__main__':
         (
             training_anderson_loss_history,
             validation_anderson_loss_history,
+            validation_anderson_accuracy_history,
         ) = optimizer_anderson.train(epochs, threshold, batch_size)
 
         if config['display']:
             epochs1 = range(1, len(training_classic_loss_history) + 1)
             epochs2 = range(1, len(training_anderson_loss_history) + 1)
-            #plt.figure(2)
-            plt.plot(
-                epochs1,
-                validation_classic_loss_history,
-                color=color[iteration],
-                linestyle='-',
-                #label='validation loss - Fixed Point',
-            )
-            plt.plot(
-                epochs2,
-                validation_anderson_loss_history,
-                color=color[iteration],
-                linestyle='--',
-                #label='validation loss - Anderson',
-            )
+            if len(validation_classic_accuracy_history) > 0:
+                plt.plot(epochs1,validation_classic_accuracy_history,color=color[iteration],linestyle='-')
+                plt.plot(epochs2,validation_anderson_accuracy_history,color=color[iteration],linestyle='--')
+            else:
+                plt.plot(epochs1,validation_classic_loss_history,color=color[iteration],linestyle='-')
+                plt.plot(epochs2,validation_anderson_loss_history,color=color[iteration],linestyle='--')                
             plt.yscale('log')
             plt.title('Validation loss function')
             plt.xlabel('Epochs')

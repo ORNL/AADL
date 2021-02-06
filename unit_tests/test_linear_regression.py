@@ -30,7 +30,7 @@ def linear_regression(slope, intercept, num_points, optimizer_str):
     optimizer_classic.import_model(model)
     optimizer_classic.set_loss_function('mse')
     optimizer_classic.set_optimizer(optimizer_str)
-    training_classic_loss_history, validation_classic_loss_history = optimizer_classic.train(epochs, threshold, batch_size)
+    training_classic_loss_history, validation_classic_loss_history, _ = optimizer_classic.train(epochs, threshold, batch_size)
 
     weights = list(model.get_model().parameters())
 
@@ -61,7 +61,7 @@ def linear_regression_anderson(slope, intercept, num_points, optimizer_str):
     optimizer_anderson.import_model(model)
     optimizer_anderson.set_loss_function('mse')
     optimizer_anderson.set_optimizer(optimizer_str)
-    training_anderson_loss_history, validation_anderson_loss_history = optimizer_anderson.train(epochs, threshold, batch_size)
+    training_anderson_loss_history, validation_anderson_loss_history, _ = optimizer_anderson.train(epochs, threshold, batch_size)
 
     weights = list(model.get_model().parameters())
 

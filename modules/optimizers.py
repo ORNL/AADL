@@ -79,6 +79,7 @@ class FixedPointIteration(object):
 
         self.training_loss_history = []
         self.validation_loss_history = []
+        self.validation_accuracy = []
 
         while epoch_counter < num_epochs and value_loss > threshold:
 
@@ -125,36 +126,35 @@ class FixedPointIteration(object):
                     output = self.model.forward(data)
                     loss = self.criterion(output, target)
                     val_loss = val_loss + loss
-                    """
-                    pred = output.argmax(
-                        dim=1, keepdim=True
-                    )  # get the index of the max log-probability
-                    correct += pred.eq(target.view_as(pred)).sum().item()
-                    """
+                    
+                    if self.loss_name == 'nll':                    
+                        pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+                        correct += pred.eq(target.view_as(pred)).sum().item()
+                    
 
                 val_loss = val_loss / count_val
 
                 self.validation_loss_history.append(val_loss)
 
-                """
-                self.print_verbose(
-                    '\n Epoch: '
-                    + str(epoch_counter)
-                    + ' - Training Loss: '
-                    + str(train_loss)
-                    + ' - Validation - Loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-                        val_loss,
-                        correct,
-                        len(self.validation_dataloader.dataset),
-                        100.0 * correct / len(self.validation_dataloader.dataset),
+                if self.loss_name == 'nll':
+                    self.print_verbose(
+                        '\n Epoch: '
+                        + str(epoch_counter)
+                        + ' - Training Loss: '
+                        + str(train_loss)
+                        + ' - Validation - Loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+                            val_loss,
+                            correct,
+                            len(self.validation_dataloader.dataset),
+                            100.0 * correct / len(self.validation_dataloader.dataset),
+                        )
                     )
-                )
-                self.print_verbose("###############################")
-                """
+                    self.print_verbose("###############################")
+                
                 value_loss = val_loss
             epoch_counter = epoch_counter + 1
 
-        return self.training_loss_history, self.validation_loss_history
+        return self.training_loss_history, self.validation_loss_history, self.validation_accuracy
 
     def set_loss_function(self, criterion_string):
 

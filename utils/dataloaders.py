@@ -50,13 +50,6 @@ def linear_regression(slope, intercept, n: int = 10):
 class LinearData(Dataset):
     def __init__(self, slope, intercept, num_points: int = 10):
         super(LinearData, self).__init__()
-        """
-        Args:
-            csv_file (string): Path to the csv file with annotations.
-            root_dir (string): Directory with all the images.
-            transform (callable, optional): Optional transform to be applied
-                on a sample.
-        """
 
         self.slope = slope
         self.intercept = intercept
@@ -86,7 +79,7 @@ class LinearData(Dataset):
 def linear_data(slope, intercept, num_points: int = 10):
     input_dim = 1
     output_dim = 1
-    return (input_dim,output_dim,LinearData(slope,intercept,num_points=num_points))
+    return input_dim, output_dim, LinearData(slope, intercept, num_points=num_points)
 
 
 ###############################################################################
@@ -108,13 +101,6 @@ def nonlinear_regression(n: int = 10):
 class NonLinearData(Dataset):
     def __init__(self, num_points: int = 10):
         super(NonLinearData, self).__init__()
-        """
-        Args:
-            csv_file (string): Path to the csv file with annotations.
-            root_dir (string): Directory with all the images.
-            transform (callable, optional): Optional transform to be applied
-                on a sample.
-        """
 
         self.num_points = num_points
 
@@ -151,7 +137,7 @@ def nonlinear_data(num_points: int = 10):
 def graduate_admission_data():
     input_dim = 7
     output_dim = 1
-    return (input_dim,output_dim,GraduateAdmission('graduate_admission.csv', './datasets/',transform=True))
+    return input_dim, output_dim, GraduateAdmission('graduate_admission.csv', './datasets/',transform=True)
 
 
 ###############################################################################
@@ -170,7 +156,7 @@ def mnist_data(subsample_factor, rand_rotation=False, max_degree=90):
     train_dataset = datasets.MNIST(root=out_dir, train=True, transform=compose, download=True)
     test_dataset = datasets.MNIST(root=out_dir, train=False, transform=compose, download=True)
 
-    return (input_dim,output_dim,train_dataset,test_dataset)
+    return input_dim, output_dim, train_dataset, test_dataset
 
 
 ###############################################################################
@@ -188,7 +174,7 @@ def cifar10_data(subsample_factor, rand_rotation=False, max_degree=90):
     train_dataset = datasets.CIFAR10(root=out_dir, train=True, transform=compose, download=True)
     test_dataset = datasets.CIFAR10(root=out_dir, train=False, transform=compose, download=True)
 
-    return (input_dim,output_dim,train_dataset,test_dataset)
+    return input_dim, output_dim, train_dataset, test_dataset
 
 
 ###############################################################################
@@ -206,7 +192,7 @@ def cifar100_data(subsample_factor, rand_rotation=False, max_degree=90):
     train_dataset = datasets.CIFAR100(root=out_dir, train=True, transform=compose, download=True)
     test_dataset = datasets.CIFAR100(root=out_dir, train=False, transform=compose, download=True)
 
-    return (input_dim,output_dim,train_dataset,test_dataset)
+    return input_dim, output_dim, train_dataset, test_dataset
 
 
 ###############################################################################
@@ -243,17 +229,17 @@ def generate_dataloaders(dataset_name, subsample_factor, batch_size):
         if dataset_name == 'mnist':
 
             dataset_found = True
-            (input_dim, output_dim, training_dataset, validation_dataset) = mnist_data(subsample_factor)
+            input_dim, output_dim, training_dataset, validation_dataset = mnist_data(subsample_factor)
 
         elif dataset_name == 'cifar10':
 
             dataset_found = True
-            (input_dim, output_dim, training_dataset, validation_dataset) = cifar10_data(subsample_factor)
+            input_dim, output_dim, training_dataset, validation_dataset = cifar10_data(subsample_factor)
 
         elif dataset_name == 'cifar100':
 
             dataset_found = True
-            (input_dim, output_dim, training_dataset, validation_dataset) = cifar100_data(subsample_factor)
+            input_dim, output_dim, training_dataset, validation_dataset = cifar100_data(subsample_factor)
 
         idx_train = get_indices_regression(training_dataset, subsample_factor)
         idx_test = get_indices_regression(validation_dataset, subsample_factor)
@@ -263,4 +249,4 @@ def generate_dataloaders(dataset_name, subsample_factor, batch_size):
 
     assert dataset_found, "Dataset not found"
 
-    return (input_dim,output_dim,training_dataloader,validation_dataloader)
+    return input_dim, output_dim, training_dataloader, validation_dataloader
