@@ -209,7 +209,7 @@ def generate_dataloaders(dataset_name, subsample_factor, batch_size):
         if dataset_name == 'graduate_admission':
             input_dim, output_dim, dataset = graduate_admission_data()
         if dataset_name == 'nonlinear':
-            input_dim, output_dim, dataset = nonlinear_data(1.0, 1.0, 1000)
+            input_dim, output_dim, dataset = nonlinear_data(1000)
         dataset_size = len(dataset)
         indices = list(range(dataset_size))
         validation_split = 0.2
