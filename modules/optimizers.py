@@ -195,7 +195,7 @@ class FixedPointIteration(object):
             self.optimizer_specified = True
         elif optimizer_string.lower() == 'lbfgs':
             self.optimizer = torch.optim.LBFGS(self.model.get_model().parameters(), lr=self.lr, history_size=10,
-                                              max_iter=20, line_search_fn=True, batch_mode=True)
+                                              max_iter=20, line_search_fn='strong_wolfe')
             self.optimizer_str = optimizer_string.lower()
             self.optimizer_specified = True
         else:
