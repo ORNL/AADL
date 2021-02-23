@@ -5,7 +5,6 @@ from types import MethodType
 
 
 import sys
-sys.path.append("../utils")
 import rna_acceleration as rna
 import anderson_acceleration as anderson
 
