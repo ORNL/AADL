@@ -3,8 +3,6 @@ from torch.nn.utils import parameters_to_vector, vector_to_parameters
 from collections import deque
 from types import MethodType
 
-
-import sys
 import rna_acceleration as rna
 import anderson_acceleration as anderson
 
