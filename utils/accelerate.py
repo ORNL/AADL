@@ -3,6 +3,9 @@ from torch.nn.utils import parameters_to_vector, vector_to_parameters
 from collections import deque
 from types import MethodType
 
+
+import sys
+sys.path.append("../utils")
 import rna_acceleration as rna
 import anderson_acceleration as anderson
 
@@ -19,23 +22,22 @@ def accelerated_step(self, closure=None):
 
     # perform acceleration
     self.acc_call_counter += 1
-    if (self.acc_call_counter > self.acc_wait_iterations) and (self.acc_call_counter % self.acc_frequency == 0):
+    if len(group_hist)>=3 and (self.acc_call_counter > self.acc_wait_iterations) and (self.acc_call_counter % self.acc_frequency == 0):
         self.acc_call_counter = 0
         for group, group_hist in zip(self.param_groups, self.acc_param_hist):
-            if len(group_hist)>=3:
-                # make matrix of updates from the history list
-                X = torch.stack(list(group_hist), dim=1)
+            # make matrix of updates from the history list
+            X = torch.stack(list(group_hist), dim=1)
 
-                # compute acceleration
-                if self.acc_type == 'anderson':
-                    acc_param = anderson.anderson(X, self.acc_relaxation)
-                elif self.acc_type == 'rna':
-                    acc_param, c = rna.rna(X, self.acc_reg)
+            # compute acceleration
+            if self.acc_type == 'anderson':
+                acc_param = anderson.anderson(X, self.acc_relaxation)
+            elif self.acc_type == 'rna':
+                acc_param, c = rna.rna(X, self.acc_reg)
 
-                # load acceleration back into model and update history
-                vector_to_parameters(acc_param, group['params'])
-                group_hist.pop()
-                group_hist.append(acc_param)
+            # load acceleration back into model and update history
+            vector_to_parameters(acc_param, group['params'])
+            group_hist.pop()
+            group_hist.append(acc_param)
 
 
 def accelerate(optimizer, acceleration_type: str = 'anderson', relaxation: float = 0.1, wait_iterations: int = 1, history_depth: int = 15, store_each_nth: int = 1, frequency: int = 1, reg_acc: float = 0.0):
