@@ -13,6 +13,7 @@ import sys
 sys.path.append("../utils")
 import rna_acceleration as rna
 import anderson_acceleration as anderson
+import accelerate as accelerate
 
 
 class FixedPointIteration(object):
@@ -231,31 +232,8 @@ class DeterministicAcceleration(FixedPointIteration):
         self.frequency = frequency
         self.reg_acc = reg_acc
 
-        self.store_counter = 0
-        self.call_counter  = 0
-        self.x_hist = deque([], maxlen=history_depth)
+    def set_optimizer(self, optimizer_string):
+        super(DeterministicAcceleration, self).set_optimizer(optimizer_string)
+        accelerate.accelerate(self.optimizer, self.acceleration_type, self.relaxation, self.wait_iterations, self.history_depth, self.store_each_nth, self.frequency, self.reg_acc)
+            
 
-
-    def accelerate(self):
-        # update history of model parameters
-        self.store_counter += 1
-        if self.store_counter >= self.store_each_nth:
-            self.store_counter = 0  # reset and continue
-            self.x_hist.append(parameters_to_vector(self.model.get_model().parameters()).detach())
-
-        # perform acceleration
-        self.call_counter += 1
-        if len(self.x_hist) >= 3 and (self.call_counter > self.wait_iterations) and (self.call_counter % self.frequency == 0):
-            # make matrix of updates from the history list
-            X = torch.stack(list(self.x_hist), dim=1)
-
-            # compute acceleration
-            if self.acceleration_type == 'anderson':
-                x_acc = anderson.anderson(X, self.relaxation)
-            elif self.acceleration_type == 'rna':
-                x_acc, c = rna.rna(X, self.reg_acc)
-
-            # load acceleration back into model and update history
-            vector_to_parameters(x_acc, self.model.get_model().parameters())
-            self.x_hist.pop()
-            self.x_hist.append(x_acc)
