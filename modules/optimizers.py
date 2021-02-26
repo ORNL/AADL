@@ -1,18 +1,7 @@
-import time
 import torch
-import numpy
-from torch import Tensor
-from torch import autograd
-from abc import ABCMeta, abstractmethod, ABC
-import math
-
-from collections import deque
-from torch.nn.utils import parameters_to_vector, vector_to_parameters
 
 import sys
 sys.path.append("../utils")
-import rna_acceleration as rna
-import anderson_acceleration as anderson
 import accelerate as accelerate
 
 
@@ -25,6 +14,7 @@ class FixedPointIteration(object):
         :type validation_dataloader: torch.utils.data.dataloader.DataLoader
         :type learning_rate: float
         :type weight_decay: float
+        :type verbose: bool
         """
         self.iteration_counter = 0
 
@@ -216,13 +206,16 @@ class DeterministicAcceleration(FixedPointIteration):
     def __init__(self,training_dataloader: torch.utils.data.dataloader.DataLoader,validation_dataloader: torch.utils.data.dataloader.DataLoader,
         acceleration_type: str = 'anderson',learning_rate: float = 1e-3,relaxation: float = 0.1,weight_decay: float = 0.0,
         wait_iterations: int = 1, history_depth: int = 15, frequency: int = 1, reg_acc: float = 0.0, store_each_nth: int = 1, verbose: bool = False):
+
         """
 
         :type training_dataloader: torch.utils.data.dataloader.DataLoader
         :type validation_dataloader: torch.utils.data.dataloader.DataLoader
-        :param learning_rate: :type: float
-        :param weight_decay: :type: float
+        :type learning_rate: float
+        :type weight_decay: float
+        :type verbose: bool
         """
+
         super(DeterministicAcceleration, self).__init__(training_dataloader,validation_dataloader,learning_rate,weight_decay,verbose)
         self.acceleration_type = acceleration_type.lower()
         self.wait_iterations = wait_iterations
