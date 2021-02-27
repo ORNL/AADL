@@ -1,18 +1,8 @@
-import time
 import torch
-import numpy
-from torch import Tensor
-from torch import autograd
-from abc import ABCMeta, abstractmethod, ABC
-import math
-
-from collections import deque
-from torch.nn.utils import parameters_to_vector, vector_to_parameters
 
 import sys
 sys.path.append("../utils")
-import rna_acceleration as rna
-import anderson_acceleration as anderson
+import accelerate as accelerate
 
 
 class FixedPointIteration(object):
@@ -24,6 +14,7 @@ class FixedPointIteration(object):
         :type validation_dataloader: torch.utils.data.dataloader.DataLoader
         :type learning_rate: float
         :type weight_decay: float
+        :type verbose: bool
         """
         self.iteration_counter = 0
 
@@ -215,13 +206,23 @@ class DeterministicAcceleration(FixedPointIteration):
     def __init__(self,training_dataloader: torch.utils.data.dataloader.DataLoader,validation_dataloader: torch.utils.data.dataloader.DataLoader,
         acceleration_type: str = 'anderson',learning_rate: float = 1e-3,relaxation: float = 0.1,weight_decay: float = 0.0,
         wait_iterations: int = 1, history_depth: int = 15, frequency: int = 1, reg_acc: float = 0.0, store_each_nth: int = 1, verbose: bool = False):
+
         """
 
         :type training_dataloader: torch.utils.data.dataloader.DataLoader
         :type validation_dataloader: torch.utils.data.dataloader.DataLoader
-        :param learning_rate: :type: float
-        :param weight_decay: :type: float
+        :type acceleration_type: string
+        :type learning_rate: float
+        :type relaxation: float
+        :type weight_decay: float
+        :type wait_iterations: int
+        :type history_depth: int
+        :type frequency: int
+        :type reg_acc: float
+        :type store_each_nth: int
+        :type verbose: bool
         """
+
         super(DeterministicAcceleration, self).__init__(training_dataloader,validation_dataloader,learning_rate,weight_decay,verbose)
         self.acceleration_type = acceleration_type.lower()
         self.wait_iterations = wait_iterations
@@ -231,31 +232,8 @@ class DeterministicAcceleration(FixedPointIteration):
         self.frequency = frequency
         self.reg_acc = reg_acc
 
-        self.store_counter = 0
-        self.call_counter  = 0
-        self.x_hist = deque([], maxlen=history_depth)
+    def set_optimizer(self, optimizer_string):
+        super(DeterministicAcceleration, self).set_optimizer(optimizer_string)
+        accelerate.accelerate(self.optimizer, self.acceleration_type, self.relaxation, self.wait_iterations, self.history_depth, self.store_each_nth, self.frequency, self.reg_acc)
+            
 
-
-    def accelerate(self):
-        # update history of model parameters
-        self.store_counter += 1
-        if self.store_counter >= self.store_each_nth:
-            self.store_counter = 0  # reset and continue
-            self.x_hist.append(parameters_to_vector(self.model.get_model().parameters()).detach())
-
-        # perform acceleration
-        self.call_counter += 1
-        if len(self.x_hist) >= 3 and (self.call_counter > self.wait_iterations) and (self.call_counter % self.frequency == 0):
-            # make matrix of updates from the history list
-            X = torch.stack(list(self.x_hist), dim=1)
-
-            # compute acceleration
-            if self.acceleration_type == 'anderson':
-                x_acc = anderson.anderson(X, self.relaxation)
-            elif self.acceleration_type == 'rna':
-                x_acc, c = rna.rna(X, self.reg_acc)
-
-            # load acceleration back into model and update history
-            vector_to_parameters(x_acc, self.model.get_model().parameters())
-            self.x_hist.pop()
-            self.x_hist.append(x_acc)

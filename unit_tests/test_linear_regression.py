@@ -48,9 +48,9 @@ def linear_regression_anderson(slope, intercept, num_points, optimizer_str):
     threshold = 1e-8
     wait_iterations = 1
     history_depth = 3
-    frequency = 1
+    frequency = 100
     reg_acc = 1e-9
-    store_each_nth = 1
+    store_each_nth = frequency
 
     training_dataloader = torch.utils.data.DataLoader(dataset, batch_size)
     validation_dataloader = torch.utils.data.DataLoader(dataset, batch_size)
