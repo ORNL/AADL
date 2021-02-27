@@ -211,8 +211,15 @@ class DeterministicAcceleration(FixedPointIteration):
 
         :type training_dataloader: torch.utils.data.dataloader.DataLoader
         :type validation_dataloader: torch.utils.data.dataloader.DataLoader
+        :type acceleration_type: string
         :type learning_rate: float
+        :type relaxation: float
         :type weight_decay: float
+        :type wait_iterations: int
+        :type history_depth: int
+        :type frequency: int
+        :type reg_acc: float
+        :type store_each_nth: int
         :type verbose: bool
         """
 
