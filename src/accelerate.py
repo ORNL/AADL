@@ -3,7 +3,6 @@ from torch.nn.utils import parameters_to_vector, vector_to_parameters
 from collections import deque
 from types import MethodType
 
-import rna_acceleration as rna
 import anderson_acceleration as anderson
 
 
@@ -29,8 +28,6 @@ def accelerated_step(self, closure=None):
                 # compute acceleration
                 if self.acc_type == 'anderson':
                     acc_param = anderson.anderson(X, self.acc_relaxation)
-                elif self.acc_type == 'rna':
-                    acc_param, c = rna.rna(X, self.acc_reg)
 
                 # load acceleration back into model and update history
                 vector_to_parameters(acc_param, group['params'])
