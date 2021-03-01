@@ -1,11 +1,11 @@
 import sys
 import torch
-
+import numpy
 import unittest
+from torch.utils.data import Dataset
 
 sys.path.append('../utils')
-sys.path.append('../modules')
-import dataloaders
+sys.path.append('../model_zoo')
 from LinearRegression_models import LinearRegression
 from optimizers import FixedPointIteration, DeterministicAcceleration
 
@@ -13,8 +13,60 @@ from optimizers import FixedPointIteration, DeterministicAcceleration
 ###############################################################################
 
 
+def linear_regression_points(slope, intercept, n: int = 10):
+    # create dummy data for training
+    x_values = numpy.linspace(-10.0, 10.0, num=n)
+    x_train = numpy.array(x_values, dtype=numpy.float32)
+    x_train = x_train.reshape(-1, 1)
+
+    y_values = [slope * i + intercept for i in x_values]
+    y_train = numpy.array(y_values, dtype=numpy.float32)
+    y_train = y_train.reshape(-1, 1)
+
+    return x_train, y_train
+
+
+class LinearData(Dataset):
+    def __init__(self, slope, intercept, num_points: int = 10):
+        super(LinearData, self).__init__()
+
+        self.slope = slope
+        self.intercept = intercept
+        self.num_points = num_points
+
+        x_sample, y_sample = linear_regression_points(self.slope, self.intercept, self.num_points)
+
+        self.x_sample = x_sample
+        self.y_values = y_sample
+        self.y_values = numpy.reshape(self.y_values, (len(self.y_values), 1))
+
+    def __len__(self):
+        return self.y_values.shape[0]
+
+    def __getitem__(self, index):
+        x_sample = self.x_sample[index, :]
+
+        y_sample = self.y_values[index]
+
+        # Doubles must be converted to Floats before passing them to a neural network model
+        x_sample = torch.from_numpy(x_sample).float()
+        y_sample = torch.from_numpy(y_sample).float()
+
+        return x_sample, y_sample
+
+
+def linear_data(slope, intercept, num_points: int = 10):
+    input_dim = 1
+    output_dim = 1
+    return input_dim, output_dim, LinearData(slope, intercept, num_points=num_points)
+
+
+
+###############################################################################
+
+
 def linear_regression(slope, intercept, num_points, optimizer_str):
-    input_dim, output_dim, dataset = dataloaders.linear_data(slope, intercept, num_points)
+    input_dim, output_dim, dataset = linear_data(slope, intercept, num_points)
     use_bias = True
     learning_rate = 1e-3
     weight_decay = 0.0
@@ -38,7 +90,7 @@ def linear_regression(slope, intercept, num_points, optimizer_str):
 
 
 def linear_regression_anderson(slope, intercept, num_points, optimizer_str):
-    input_dim, output_dim, dataset = dataloaders.linear_data(slope, intercept, num_points)
+    input_dim, output_dim, dataset = linear_data(slope, intercept, num_points)
     use_bias = True
     learning_rate = 1e-3
     relaxation = 0.5
