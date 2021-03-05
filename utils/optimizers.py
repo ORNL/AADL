@@ -3,7 +3,7 @@ import torch
 import sys
 sys.path.append("../src")
 sys.path.append("../utils")
-import accelerate as accelerate
+import AADL as accelerate
 
 
 class FixedPointIteration(object):
