@@ -47,17 +47,19 @@ import sys
 from copy import deepcopy
 
 import matplotlib.pyplot as plt
+from matplotlib.pyplot import cm
 import torch
 from numpy.core.defchararray import lower
 
-sys.path.append("./utils")
-sys.path.append("./modules")
-from modules.NN_models import MLP, CNN2D
-from modules.optimizers import FixedPointIteration, DeterministicAcceleration
-from utils.dataloaders import generate_dataloaders
-from matplotlib.pyplot import cm
 import numpy
-from utils.gpu_detection import get_gpu
+
+sys.path.append("../../utils")
+from optimizers import FixedPointIteration, DeterministicAcceleration
+sys.path.append("../../model_zoo")
+from NN_models import CNN2D
+from cifar10_dataloader import dataloader
+
+from gpu_detection import get_gpu
 
 plt.rcParams.update({'font.size': 16})
 
@@ -146,7 +148,7 @@ if __name__ == '__main__':
         output_dim,
         training_dataloader,
         validation_dataloader,
-    ) = generate_dataloaders(dataset_name, subsample_factor, batch_size)
+    ) = dataloader(dataset_name, subsample_factor, batch_size)
 
     color = cm.rainbow(numpy.linspace(0, 1, number_runs))
 
@@ -154,13 +156,7 @@ if __name__ == '__main__':
 
         torch.manual_seed(iteration)
 
-        # Define deep learning model
-        if model_name == 'mlp':
-             model_classic = MLP(input_dim,output_dim,num_neurons_list,use_bias,activation,classification_problem,available_device)
-        elif model_name == 'cnn':
-            model_classic = CNN2D(input_dim,output_dim,num_neurons_list,use_bias,activation,classification_problem,available_device)
-        else:
-            raise RuntimeError('Model type not recognized')
+        model_classic = CNN2D(input_dim,output_dim,num_neurons_list,use_bias,activation,classification_problem,available_device)
 
         model_anderson = deepcopy(model_classic)
 
