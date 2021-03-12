@@ -3,9 +3,9 @@ import torch
 import unittest
 
 sys.path.append('../utils')
-sys.path.append('../modules')
-from Paraboloid_models import Paraboloid
 from optimizers import FixedPointIteration, DeterministicAcceleration
+sys.path.append('../model_zoo')
+from Paraboloid_models import Paraboloid
 
 
 ###############################################################################
@@ -24,7 +24,7 @@ def test_multiscale_paraboloid(dim=100, condition_number=1.e3, optimizer='sgd', 
     optimizer_classic.import_model(model)
     optimizer_classic.set_loss_function('mse')
     optimizer_classic.set_optimizer(optimizer)
-    training_classic_loss_history, validation_classic_loss_history = optimizer_classic.train(epochs, threshold, batch_size)
+    _, validation_classic_loss_history, _ = optimizer_classic.train(epochs, threshold, batch_size)
 
     weights = model.get_model().get_weight()
 
@@ -50,7 +50,7 @@ def test_multiscale_paraboloid_anderson(dim=100,condition_number=1.0e3,optimizer
     optimizer_anderson.import_model(model)
     optimizer_anderson.set_loss_function('mse')
     optimizer_anderson.set_optimizer(optimizer)
-    training_anderson_loss_history, validation_anderson_loss_history = optimizer_anderson.train(epochs, threshold, batch_size)
+    _, validation_anderson_loss_history, _ = optimizer_anderson.train(epochs, threshold, batch_size)
 
     weights = model.get_model().get_weight()
 
