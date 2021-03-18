@@ -1,6 +1,7 @@
-*.DS_Store
-.idea/
+.DS_Store
+.idea
 build/
 __pycache__
+datasets
 *.png
-datasets/
+
