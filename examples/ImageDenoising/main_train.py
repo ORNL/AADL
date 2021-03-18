@@ -157,6 +157,7 @@ if __name__ == '__main__':
     # criterion = nn.MSELoss(reduction = 'sum')  # PyTorch 0.4.1
     criterion = sum_squared_error()
     if cuda:
+        print("Available device: ", available_device)
         model_classic.to(available_device)
         model_anderson.to(available_device)
          # device_ids = [0]
@@ -181,7 +182,7 @@ if __name__ == '__main__':
         for n_count, batch_yx in enumerate(DLoader):
                 optimizer.zero_grad()
                 batch_x, batch_y = batch_yx[1], batch_yx[0]
-                loss = criterion(model_classic(batch_y), batch_x)
+                loss = criterion(model_classic(batch_y.to(available_device)), batch_x.to(available_device))
                 epoch_loss += loss.item()
                 loss.backward()
                 optimizer.step()
@@ -222,7 +223,7 @@ if __name__ == '__main__':
         for n_count, batch_yx in enumerate(DLoader):
                 optimizer.zero_grad()
                 batch_x, batch_y = batch_yx[1], batch_yx[0]
-                loss = criterion(model_anderson(batch_y), batch_x)
+                loss = criterion(model_anderson(batch_y.to(available_device)), batch_x.to(available_device))
                 epoch_loss += loss.item()
                 loss.backward()
                 optimizer.step()
