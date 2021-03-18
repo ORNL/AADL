@@ -56,6 +56,9 @@ cuda = torch.cuda.is_available()
 n_epoch = args.epoch
 sigma = args.sigma
 
+if not os.path.exists('models'):
+    os.mkdir('models')
+
 save_dir = os.path.join('models', args.model+'_' + 'sigma' + str(sigma))
 
 if not os.path.exists(save_dir):
