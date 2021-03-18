@@ -40,6 +40,9 @@ import data_generator as dg
 from data_generator import DenoisingDataset
 import matplotlib.pyplot as plt
 
+import sys
+sys.path.append("../../utils")
+from gpu_detection import get_gpu
 
 # Params
 parser = argparse.ArgumentParser(description='PyTorch DnCNN')
@@ -135,6 +138,11 @@ def log(*args, **kwargs):
 
 if __name__ == '__main__':
     
+    # The only reason why I do this workaround (not necessary now) is because
+    # I am thinking to the situation where one MPI process has multiple gpus available
+    # In that case, the argument passed to get_gpu may be a numberID > 0
+    available_device = get_gpu(0)    
+    
     # model selection
     print('===> Building model')
     model_classic = DnCNN()
@@ -149,7 +157,8 @@ if __name__ == '__main__':
     # criterion = nn.MSELoss(reduction = 'sum')  # PyTorch 0.4.1
     criterion = sum_squared_error()
     if cuda:
-        model_classic = model_classic.cuda()
+        model_classic.to(available_device)
+        model_anderson.to(available_device)
          # device_ids = [0]
          # model = nn.DataParallel(model, device_ids=device_ids).cuda()
          # criterion = criterion.cuda()
