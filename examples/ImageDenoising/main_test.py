@@ -23,7 +23,6 @@ import os, time, datetime
 # import PIL.Image as Image
 import numpy as np
 import torch.nn as nn
-import torch.nn.init as init
 import torch
 from skimage.measure import compare_psnr, compare_ssim
 from skimage.io import imread, imsave
@@ -95,13 +94,13 @@ class DnCNN(nn.Module):
     def _initialize_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                init.orthogonal_(m.weight)
+                torch.nn.init.orthogonal_(m.weight)
                 print('init weight')
                 if m.bias is not None:
-                    init.constant_(m.bias, 0)
+                    torch.nn.init.constant_(m.bias, 0)
             elif isinstance(m, nn.BatchNorm2d):
-                init.constant_(m.weight, 1)
-                init.constant_(m.bias, 0)
+                torch.nn.init.constant_(m.weight, 1)
+                torch.nn.init.constant_(m.bias, 0)
 
 
 if __name__ == '__main__':
