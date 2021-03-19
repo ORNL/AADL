@@ -148,28 +148,21 @@ if __name__ == '__main__':
     model_classic = DnCNN()
     model_anderson = deepcopy(model_classic)
     
-    initial_epoch = findLastCheckpoint(save_dir=save_dir)  # load the last model in matconvnet style
-    if initial_epoch > 0:
-        print('resuming by loading epoch %03d' % initial_epoch)
-        # model.load_state_dict(torch.load(os.path.join(save_dir, 'model_%03d.pth' % initial_epoch)))
-        model_classic = torch.load(os.path.join(save_dir, 'model_%03d.pth' % initial_epoch))
-    model_classic.train()
+    # initial_epoch = findLastCheckpoint(save_dir=save_dir)  # load the last model in matconvnet style
     # criterion = nn.MSELoss(reduction = 'sum')  # PyTorch 0.4.1
     criterion = sum_squared_error()
     if cuda:
         print("Available device: ", available_device)
         model_classic.to(available_device)
         model_anderson.to(available_device)
-         # device_ids = [0]
-         # model = nn.DataParallel(model, device_ids=device_ids).cuda()
-         # criterion = criterion.cuda()
-    optimizer = optim.Adam(model_classic.parameters(), lr=args.lr)
+
+    optimizer_classic = optim.Adam(model_classic.parameters(), lr=args.lr)        
+    scheduler_classic = MultiStepLR(optimizer_classic, milestones=[30, 60, 90], gamma=0.2)  # learning rates
+    training_classic_loss_history = []
     
-    
-    scheduler = MultiStepLR(optimizer, milestones=[30, 60, 90], gamma=0.2)  # learning rates
     for epoch in range(initial_epoch, n_epoch):
 
-        scheduler.step(epoch)  # step to the learning rate in this epcoh
+        scheduler_classic.step(epoch)  # step to the learning rate in this epcoh
         xs = dg.datagenerator(data_dir=args.train_data)
         xs = xs.astype('float32')/255.0
         xs = torch.from_numpy(xs.transpose((0, 3, 1, 2)))  # tensor of the clean patches, NXCXHXW
@@ -177,20 +170,19 @@ if __name__ == '__main__':
         DLoader = DataLoader(dataset=DDataset, num_workers=4, drop_last=True, batch_size=batch_size, shuffle=True)
         epoch_loss = 0
         start_time = time.time()
-        training_classic_loss_history = []
 
         for n_count, batch_yx in enumerate(DLoader):
-                optimizer.zero_grad()
+                optimizer_classic.zero_grad()
                 batch_x, batch_y = batch_yx[1], batch_yx[0]
                 loss = criterion(model_classic(batch_y.to(available_device)), batch_x.to(available_device))
                 epoch_loss += loss.item()
                 loss.backward()
-                optimizer.step()
+                optimizer_classic.step()
                 if n_count % 10 == 0:
                     print('%4d %4d / %4d loss = %2.4f' % (epoch+1, n_count, xs.size(0)//batch_size, loss.item()/batch_size))
         elapsed_time = time.time() - start_time
 
-        log('epcoh = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss/n_count, elapsed_time))
+        log('epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss/n_count, elapsed_time))
         np.savetxt('classic_train_result.txt', np.hstack((epoch+1, epoch_loss/n_count, elapsed_time)), fmt='%2.4f')
         # torch.save(model.state_dict(), os.path.join(save_dir, 'model_%03d.pth' % (epoch+1)))
         torch.save(model_classic, os.path.join(save_dir, 'model_classic_%03d.pth' % (epoch+1)))
@@ -198,19 +190,23 @@ if __name__ == '__main__':
         
     
     epochs_classic = range(initial_epoch+1, n_epoch+1)
-    
+
     # Parameters for Anderson acceleration
     relaxation = 0.5
     wait_iterations = 1
-    history_depth = 10
-    store_each_nth = 10
+    history_depth = 100
+    store_each_nth = 180
     frequency = store_each_nth
     reg_acc = 1e-8
-    accelerate.accelerate(optimizer, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc)
+    training_anderson_loss_history = []
+
+    optimizer_anderson = optim.Adam(model_anderson.parameters(), lr=args.lr)        
+    scheduler_anderson = MultiStepLR(optimizer_anderson, milestones=[30, 60, 90], gamma=0.2)  # learning rates
+    accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc)
 
     for epoch in range(initial_epoch, n_epoch):
 
-        scheduler.step(epoch)  # step to the learning rate in this epcoh
+        scheduler_anderson.step(epoch)  # step to the learning rate in this epcoh
         xs = dg.datagenerator(data_dir=args.train_data)
         xs = xs.astype('float32')/255.0
         xs = torch.from_numpy(xs.transpose((0, 3, 1, 2)))  # tensor of the clean patches, NXCXHXW
@@ -218,29 +214,36 @@ if __name__ == '__main__':
         DLoader = DataLoader(dataset=DDataset, num_workers=4, drop_last=True, batch_size=batch_size, shuffle=True)
         epoch_loss = 0
         start_time = time.time()
-        training_anderson_loss_history = []
 
         for n_count, batch_yx in enumerate(DLoader):
-                optimizer.zero_grad()
+                optimizer_anderson.zero_grad()
                 batch_x, batch_y = batch_yx[1], batch_yx[0]
                 loss = criterion(model_anderson(batch_y.to(available_device)), batch_x.to(available_device))
                 epoch_loss += loss.item()
                 loss.backward()
-                optimizer.step()
+                optimizer_anderson.step()
                 if n_count % 10 == 0:
                     print('%4d %4d / %4d loss = %2.4f' % (epoch+1, n_count, xs.size(0)//batch_size, loss.item()/batch_size))
         elapsed_time = time.time() - start_time
 
-        log('epcoh = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss/n_count, elapsed_time))
-        np.savetxt('classic_train_result.txt', np.hstack((epoch+1, epoch_loss/n_count, elapsed_time)), fmt='%2.4f')
+        log('epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss/n_count, elapsed_time))
+        np.savetxt('anderson_train_result.txt', np.hstack((epoch+1, epoch_loss/n_count, elapsed_time)), fmt='%2.4f')
         # torch.save(model.state_dict(), os.path.join(save_dir, 'model_%03d.pth' % (epoch+1)))
-        torch.save(model_classic, os.path.join(save_dir, 'model_classic_%03d.pth' % (epoch+1)))
+        torch.save(model_anderson, os.path.join(save_dir, 'model_anderson_%03d.pth' % (epoch+1)))
         training_anderson_loss_history.append(epoch_loss/n_count)
         
     epochs_anderson = range(initial_epoch+1, n_epoch+1)
         
     plt.plot(epochs_classic,training_classic_loss_history,linestyle='-')
     plt.plot(epochs_anderson,training_anderson_loss_history,linestyle='--')              
+    plt.yscale('log')
+    plt.title('Validation loss function')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.draw()
+    plt.savefig('validation_loss_plot')
+    plt.tight_layout()
+
 
 
 
