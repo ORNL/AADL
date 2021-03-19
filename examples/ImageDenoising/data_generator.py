@@ -109,7 +109,7 @@ def gen_patches(file_name):
 def datagenerator(data_dir, verbose=False):
     # generate clean patches from a dataset
     file_list = glob.glob(data_dir+'/*.png')  # get name list of all .png files
-    # initrialize
+    # initialize
     data = []
     # generate patches
     for i in range(len(file_list)):
@@ -125,10 +125,4 @@ def datagenerator(data_dir, verbose=False):
     print('^_^-training data finished-^_^')
     return data
 
-"""
-if __name__ == '__main__': 
-
-    #'data/Train400'
-    data = datagenerator('data/Train400')
-"""
    
