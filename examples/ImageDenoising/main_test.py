@@ -28,6 +28,12 @@ import torch
 from skimage.measure import compare_psnr, compare_ssim
 from skimage.io import imread, imsave
 
+has_matplotlib = True
+try:
+    import matplotlib.pyplot as plt
+except:
+    has_matplotlib = False
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -41,12 +47,12 @@ def parse_args():
     return parser.parse_args()
 
 
-def log(*args, **kwargs):
+def test_log(*args, **kwargs):
      print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S:"), *args, **kwargs)
 
 
 def save_result(result, path):
-    path = path if path.find('.') != -1 else path+'.png'
+    path = path if path.endswith('.png') else path + '.png'
     ext = os.path.splitext(path)[-1]
     if ext in ('.txt', '.dlm'):
         np.savetxt(path, result, fmt='%2.4f')
@@ -55,7 +61,6 @@ def save_result(result, path):
 
 
 def show(x, title=None, cbar=False, figsize=None):
-    import matplotlib.pyplot as plt
     plt.figure(figsize=figsize)
     plt.imshow(x, interpolation='nearest', cmap='gray')
     if title:
@@ -108,23 +113,13 @@ if __name__ == '__main__':
 
         model = torch.load(os.path.join(args.model_dir, 'model.pth'))
         # load weights into new model
-        log('load trained model on Train400 dataset by kai')
+        test_log('load trained model on Train400 dataset by kai')
     else:
         # model.load_state_dict(torch.load(os.path.join(args.model_dir, args.model_name)))
         model = torch.load(os.path.join(args.model_dir, args.model_name))
-        log('load trained model')
-
-#    params = model.state_dict()
-#    print(params.values())
-#    print(params.keys())
-#
-#    for key, value in params.items():
-#        print(key)    # parameter name
-#    print(params['dncnn.12.running_mean'])
-#    print(model.state_dict())
+        test_log('load trained model')
 
     model.eval()  # evaluation mode
-#    model.train()
 
     if torch.cuda.is_available():
         model = model.cuda()
@@ -173,12 +168,6 @@ if __name__ == '__main__':
         ssims.append(ssim_avg)
         if args.save_result:
             save_result(np.hstack((psnrs, ssims)), path=os.path.join(args.result_dir, set_cur, 'results.txt'))
-        log('Datset: {0:10s} \n  PSNR = {1:2.2f}dB, SSIM = {2:1.4f}'.format(set_cur, psnr_avg, ssim_avg))
-
-
-
-
-
-
+        test_log('Datset: {0:10s} \n  PSNR = {1:2.2f}dB, SSIM = {2:1.4f}'.format(set_cur, psnr_avg, ssim_avg))
 
 

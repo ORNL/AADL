@@ -31,7 +31,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn.modules.loss import _Loss
-import torch.nn.init as init
 from torch.utils.data import DataLoader
 import torch.optim as optim
 from torch.optim.lr_scheduler import MultiStepLR
@@ -43,6 +42,7 @@ import matplotlib.pyplot as plt
 import sys
 sys.path.append("../../utils")
 from gpu_detection import get_gpu
+import AADL as accelerate
 
 # Params
 parser = argparse.ArgumentParser(description='PyTorch DnCNN')
@@ -93,13 +93,13 @@ class DnCNN(nn.Module):
     def _initialize_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                init.orthogonal_(m.weight)
+                torch.nn.init.orthogonal_(m.weight)
                 print('init weight')
                 if m.bias is not None:
-                    init.constant_(m.bias, 0)
+                    torch.nn.init.constant_(m.bias, 0)
             elif isinstance(m, nn.BatchNorm2d):
-                init.constant_(m.weight, 1)
-                init.constant_(m.bias, 0)
+                torch.nn.init.constant_(m.weight, 1)
+                torch.nn.init.constant_(m.bias, 0)
 
 
 class sum_squared_error(_Loss):  # PyTorch 0.4.1
@@ -128,15 +128,13 @@ def findLastCheckpoint(save_dir):
     return initial_epoch
 
 
-import sys
-sys.path.append("/Users/7ml/Documents/LDRD_AI_Project/accelerated_deeplearning_training/utils")
-import AADL as accelerate
-
-def log(*args, **kwargs):
+def train_log(*args, **kwargs):
      print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S:"), *args, **kwargs)
 
 
 if __name__ == '__main__':
+    
+    print("VAFFANCULO: ", args.train_data)
     
     # The only reason why I do this workaround (not necessary now) is because
     # I am thinking to the situation where one MPI process has multiple gpus available
@@ -160,6 +158,8 @@ if __name__ == '__main__':
     scheduler_classic = MultiStepLR(optimizer_classic, milestones=[30, 60, 90], gamma=0.2)  # learning rates
     training_classic_loss_history = []
     
+    initial_epoch = int(0)
+    
     for epoch in range(initial_epoch, n_epoch):
 
         scheduler_classic.step(epoch)  # step to the learning rate in this epcoh
@@ -182,7 +182,7 @@ if __name__ == '__main__':
                     print('%4d %4d / %4d loss = %2.4f' % (epoch+1, n_count, xs.size(0)//batch_size, loss.item()/batch_size))
         elapsed_time = time.time() - start_time
 
-        log('epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss/n_count, elapsed_time))
+        train_log('epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss/n_count, elapsed_time))
         np.savetxt('classic_train_result.txt', np.hstack((epoch+1, epoch_loss/n_count, elapsed_time)), fmt='%2.4f')
         # torch.save(model.state_dict(), os.path.join(save_dir, 'model_%03d.pth' % (epoch+1)))
         torch.save(model_classic, os.path.join(save_dir, 'model_classic_%03d.pth' % (epoch+1)))
@@ -226,7 +226,7 @@ if __name__ == '__main__':
                     print('%4d %4d / %4d loss = %2.4f' % (epoch+1, n_count, xs.size(0)//batch_size, loss.item()/batch_size))
         elapsed_time = time.time() - start_time
 
-        log('epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss/n_count, elapsed_time))
+        train_log('epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss/n_count, elapsed_time))
         np.savetxt('anderson_train_result.txt', np.hstack((epoch+1, epoch_loss/n_count, elapsed_time)), fmt='%2.4f')
         # torch.save(model.state_dict(), os.path.join(save_dir, 'model_%03d.pth' % (epoch+1)))
         torch.save(model_anderson, os.path.join(save_dir, 'model_anderson_%03d.pth' % (epoch+1)))
@@ -243,9 +243,5 @@ if __name__ == '__main__':
     plt.draw()
     plt.savefig('validation_loss_plot')
     plt.tight_layout()
-
-
-
-
 
 
