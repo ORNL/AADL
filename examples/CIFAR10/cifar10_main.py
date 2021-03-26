@@ -204,20 +204,29 @@ if __name__ == '__main__':
         ) = optimizer_anderson.train(epochs, threshold, batch_size)
 
         if config['display']:
+
             epochs1 = range(1, len(training_classic_loss_history) + 1)
             epochs2 = range(1, len(training_anderson_loss_history) + 1)
-            if len(validation_classic_accuracy_history) > 0:
-                plt.plot(epochs1,validation_classic_accuracy_history,color=color[iteration],linestyle='-')
-                plt.plot(epochs2,validation_anderson_accuracy_history,color=color[iteration],linestyle='--')
-            else:
-                plt.plot(epochs1,validation_classic_loss_history,color=color[iteration],linestyle='-')
-                plt.plot(epochs2,validation_anderson_loss_history,color=color[iteration],linestyle='--')                
-            plt.yscale('log')
+
+            plt.figure()
+            plt.plot(epochs1,validation_classic_loss_history,color=color[iteration],linestyle='-')
+            plt.plot(epochs2,validation_anderson_loss_history,color=color[iteration],linestyle='--')                         plt.yscale('log')
             plt.title('Validation loss function')
             plt.xlabel('Epochs')
             plt.ylabel('Loss')
             #plt.legend()
             plt.draw()
             plt.savefig('validation_loss_plot')
+            plt.tight_layout()
 
+            plt.figure()
+            plt.plot(epochs1,validation_classic_accuracy_history,color=color[iteration],linestyle='-')
+            plt.plot(epochs2,validation_anderson_accuracy_history,color=color[iteration],linestyle='--')
+            plt.yscale('log')
+            plt.title('Validation accuracy')
+            plt.xlabel('Epochs')
+            plt.ylabel('Loss')
+            #plt.legend()
+            plt.draw()
+            plt.savefig('validation_accuracy_plot')
             plt.tight_layout()
