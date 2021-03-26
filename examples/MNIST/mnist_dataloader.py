@@ -11,7 +11,8 @@ from torch.utils.data.sampler import SubsetRandomSampler
 def get_indices_regression(dataset, subset_portion):
     num_elements = int(subset_portion * (len(dataset.targets)))
     indices = random.sample(list(range(0,len(dataset.targets))),num_elements)
-    return indices
+    # I do this to avoid repetitions of the same data point in the sub-dataset
+    return list(set(indices))
 
 
 def get_indices_classification(dataset, subset_portion):
