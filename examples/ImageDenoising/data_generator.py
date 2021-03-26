@@ -25,6 +25,11 @@ import numpy as np
 # from multiprocessing import Pool
 from torch.utils.data import Dataset
 import torch
+has_matplotlib = True
+try:
+    import matplotlib.pyplot as plt
+except:
+    has_matplotlib = False
 
 patch_size, stride = 40, 10
 aug_times = 1
@@ -54,7 +59,6 @@ class DenoisingDataset(Dataset):
 
 
 def show(x, title=None, cbar=False, figsize=None):
-    import matplotlib.pyplot as plt
     plt.figure(figsize=figsize)
     plt.imshow(x, interpolation='nearest', cmap='gray')
     if title:
@@ -102,10 +106,10 @@ def gen_patches(file_name):
     return patches
 
 
-def datagenerator(data_dir='data/Train400', verbose=False):
+def datagenerator(data_dir, verbose=False):
     # generate clean patches from a dataset
     file_list = glob.glob(data_dir+'/*.png')  # get name list of all .png files
-    # initrialize
+    # initialize
     data = []
     # generate patches
     for i in range(len(file_list)):
@@ -121,15 +125,4 @@ def datagenerator(data_dir='data/Train400', verbose=False):
     print('^_^-training data finished-^_^')
     return data
 
-
-if __name__ == '__main__': 
-
-    data = datagenerator(data_dir='data/Train400')
-
-
-#    print('Shape of result = ' + str(res.shape))
-#    print('Saving data...')
-#    if not os.path.exists(save_dir):
-#            os.mkdir(save_dir)
-#    np.save(save_dir+'clean_patches.npy', res)
-#    print('Done.')       
+   
