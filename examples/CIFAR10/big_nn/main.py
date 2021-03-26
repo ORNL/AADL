@@ -10,6 +10,7 @@ import torchvision.transforms as transforms
 
 import os
 import argparse
+from copy import deepcopy
 
 import sys
 sys.path.append("../../../utils")
@@ -31,6 +32,83 @@ from resnext import *
 from shufflenet import *
 from shufflenetv2 import *
 from vgg import *
+
+
+class Optimization:
+    
+    def __init__(self, network: torch.nn.Module, trainloader: torch.utils.data.DataLoader, testloader: torch.utils.data.DataLoader, optimizer: torch.optim, num_epochs: int):
+        
+        self.trainloader = trainloader
+        self.testloader = testloader
+        self.network = network
+        self.optimizer = optimizer
+        self.num_epochs = num_epochs
+        self.training_loss_history = []
+        self.training_accuracy_history = []
+        self.validation_loss_history = []
+        self.validation_accuracy_history = []
+        
+    # Training
+    def train_epoch(self, epoch):
+        
+        print('\nEpoch: %d' % epoch)
+        self.network.train()
+        train_loss = 0
+        correct = 0
+        total = 0
+        for batch_idx, (inputs, targets) in enumerate(trainloader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            self.optimizer.zero_grad()
+            outputs = self.network(inputs)
+            loss = criterion(outputs, targets)
+            loss.backward()
+            self.optimizer.step()
+    
+            train_loss += loss.item()
+            _, predicted = outputs.max(1)
+            total += targets.size(0)
+            correct += predicted.eq(targets).sum().item()
+    
+            progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                         % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+        
+        self.training_loss_history.append(train_loss)
+        self.training_accuracy_history.append(100.*correct/total)
+            
+    
+    def validation_epoch(self, epoch):
+        
+        self.network.eval()
+        validation_loss = 0
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for batch_idx, (inputs, targets) in enumerate(testloader):
+                inputs, targets = inputs.to(device), targets.to(device)
+                outputs = self.network(inputs)
+                loss = criterion(outputs, targets)
+    
+                validation_loss += loss.item()
+                _, predicted = outputs.max(1)
+                total += targets.size(0)
+                correct += predicted.eq(targets).sum().item()
+    
+                progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                             % (validation_loss/(batch_idx+1), 100.*correct/total, correct, total))      
+            
+        self.validation_loss_history.append(validation_loss) 
+        self.validation_accuracy_history.append(100.*correct/total)    
+        
+        
+    def train(self):
+        
+        for epoch in range(0, self.num_epochs):
+            self.train_epoch(epoch)
+            self.validation_epoch(epoch)
+            
+        return self.training_loss_history, self.training_accuracy_history, self.validation_loss_history, self.validation_accuracy_history
+        
+    
 
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
@@ -87,9 +165,18 @@ print('==> Building model..')
 # net = EfficientNetB0()
 # net = RegNetX_200MF()
 net = SimpleDLA()
-net = net.to(device)
+
+# Perform deepcopies of the original model 
+net_classic = deepcopy(net)
+net_anderson = deepcopy(net)
+
+# Map neural networks to aq device if any GPU is available
+net_classic = net_classic.to(device)
+net_anderson = net_anderson.to(device)
+
 if device == 'cuda':
-    net = torch.nn.DataParallel(net)
+    net_classic = torch.nn.DataParallel(net_classic)
+    net_anderson = torch.nn.DataParallel(net_anderson)
     cudnn.benchmark = True
 
 if args.resume:
@@ -97,76 +184,21 @@ if args.resume:
     print('==> Resuming from checkpoint..')
     assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
     checkpoint = torch.load('./checkpoint/ckpt.pth')
-    net.load_state_dict(checkpoint['net'])
     best_acc = checkpoint['acc']
     start_epoch = checkpoint['epoch']
 
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=args.lr,
+optimizer_classic = optim.SGD(net_classic.parameters(), lr=args.lr,
                       momentum=0.9, weight_decay=5e-4)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
+scheduler_classic = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_classic, T_max=200)
+
+optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr,
+                      momentum=0.9, weight_decay=5e-4)
+scheduler_anderson = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_anderson, T_max=200)
 
 
-# Training
-def train(epoch):
-    print('\nEpoch: %d' % epoch)
-    net.train()
-    train_loss = 0
-    correct = 0
-    total = 0
-    for batch_idx, (inputs, targets) in enumerate(trainloader):
-        inputs, targets = inputs.to(device), targets.to(device)
-        optimizer.zero_grad()
-        outputs = net(inputs)
-        loss = criterion(outputs, targets)
-        loss.backward()
-        optimizer.step()
+optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, 2)
+optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, 2)
 
-        train_loss += loss.item()
-        _, predicted = outputs.max(1)
-        total += targets.size(0)
-        correct += predicted.eq(targets).sum().item()
-
-        progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                     % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-
-
-def test(epoch):
-    global best_acc
-    net.eval()
-    test_loss = 0
-    correct = 0
-    total = 0
-    with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(testloader):
-            inputs, targets = inputs.to(device), targets.to(device)
-            outputs = net(inputs)
-            loss = criterion(outputs, targets)
-
-            test_loss += loss.item()
-            _, predicted = outputs.max(1)
-            total += targets.size(0)
-            correct += predicted.eq(targets).sum().item()
-
-            progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                         % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
-
-    # Save checkpoint.
-    acc = 100.*correct/total
-    if acc > best_acc:
-        print('Saving..')
-        state = {
-            'net': net.state_dict(),
-            'acc': acc,
-            'epoch': epoch,
-        }
-        if not os.path.isdir('checkpoint'):
-            os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/ckpt.pth')
-        best_acc = acc
-
-
-for epoch in range(start_epoch, start_epoch+200):
-    train(epoch)
-    test(epoch)
-    scheduler.step()
+_, _, validation_loss_classic, validation_accuracy_classic = optimization_classic.train()
+_, _, validation_loss_anderson, validation_accuracy_anderson = optimization_anderson.train()
