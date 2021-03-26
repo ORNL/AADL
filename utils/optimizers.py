@@ -141,6 +141,7 @@ class FixedPointIteration(object):
                             100.0 * correct / len(self.validation_dataloader.dataset),
                         )
                     )
+                    self.validation_accuracy.append(100.0 * correct / len(self.validation_dataloader.dataset))
                     self.print_verbose("###############################")
                 
                 value_loss = val_loss
