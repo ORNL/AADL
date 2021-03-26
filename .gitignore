@@ -3,5 +3,6 @@
 data/
 build/
 __pycache__
+datasets
 *.png
-datasets/
+
