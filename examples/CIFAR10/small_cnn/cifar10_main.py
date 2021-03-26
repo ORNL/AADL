@@ -53,9 +53,9 @@ from numpy.core.defchararray import lower
 
 import numpy
 
-sys.path.append("../../utils")
+sys.path.append("../../../utils")
 from optimizers import FixedPointIteration, DeterministicAcceleration
-sys.path.append("../../model_zoo")
+sys.path.append("../../../model_zoo")
 from NN_models import CNN2D
 from cifar10_dataloader import dataloader
 
@@ -210,7 +210,8 @@ if __name__ == '__main__':
 
             plt.figure()
             plt.plot(epochs1,validation_classic_loss_history,color=color[iteration],linestyle='-')
-            plt.plot(epochs2,validation_anderson_loss_history,color=color[iteration],linestyle='--')                         plt.yscale('log')
+            plt.plot(epochs2,validation_anderson_loss_history,color=color[iteration],linestyle='--')            
+            plt.yscale('log')
             plt.title('Validation loss function')
             plt.xlabel('Epochs')
             plt.ylabel('Loss')

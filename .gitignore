@@ -1,5 +1,6 @@
 .DS_Store
 .idea/
+data/
 build/
 __pycache__
 *.png
