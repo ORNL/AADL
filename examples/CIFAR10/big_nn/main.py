@@ -2,19 +2,24 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 
 import torchvision
 import torchvision.transforms as transforms
 
+import matplotlib.pyplot as plt
 import os
 import argparse
 from copy import deepcopy
 
+import AADL as accelerate
+
 import sys
 sys.path.append("../../../utils")
 from monitor_progress_utils import progress_bar
+
+
+# Import paths to NN models that can be used for object classification
 import sys
 sys.path.append("../../../model_zoo")
 from densenet import *
@@ -47,6 +52,28 @@ class Optimization:
         self.training_accuracy_history = []
         self.validation_loss_history = []
         self.validation_accuracy_history = []
+        
+    def initial_performance_evaluation(self):
+        
+        train_loss = 0
+        correct = 0
+        total = 0
+        
+        for batch_idx, (inputs, targets) in enumerate(trainloader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            outputs = self.network(inputs)
+            loss = criterion(outputs, targets)
+    
+            train_loss += loss.item()
+            _, predicted = outputs.max(1)
+            total += targets.size(0)
+            correct += predicted.eq(targets).sum().item()
+        
+        self.training_loss_history.append(train_loss)
+        self.training_accuracy_history.append(100.*correct/total)        
+        self.validation_loss_history.append(train_loss)
+        self.validation_accuracy_history.append(100.*correct/total)        
+        
         
     # Training
     def train_epoch(self, epoch):
@@ -103,6 +130,7 @@ class Optimization:
     def train(self):
         
         for epoch in range(0, self.num_epochs):
+            self.initial_performance_evaluation()
             self.train_epoch(epoch)
             self.validation_epoch(epoch)
             
@@ -166,6 +194,8 @@ print('==> Building model..')
 # net = RegNetX_200MF()
 net = SimpleDLA()
 
+torch.manual_seed(0)
+
 # Perform deepcopies of the original model 
 net_classic = deepcopy(net)
 net_anderson = deepcopy(net)
@@ -192,13 +222,49 @@ optimizer_classic = optim.SGD(net_classic.parameters(), lr=args.lr,
                       momentum=0.9, weight_decay=5e-4)
 scheduler_classic = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_classic, T_max=200)
 
+# Parameters for Anderson acceleration
+relaxation = 0.1
+wait_iterations = 1
+history_depth = 10
+store_each_nth = 1
+frequency = store_each_nth
+reg_acc = 1e-8
+
 optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr,
                       momentum=0.9, weight_decay=5e-4)
 scheduler_anderson = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_anderson, T_max=200)
+accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc)
 
-
-optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, 2)
-optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, 2)
+optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, 100)
+optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, 100)
 
 _, _, validation_loss_classic, validation_accuracy_classic = optimization_classic.train()
 _, _, validation_loss_anderson, validation_accuracy_anderson = optimization_anderson.train()
+
+epochs1 = range(0, len(validation_loss_classic) + 1)
+epochs2 = range(0, len(validation_loss_anderson) + 1)
+
+plt.figure()
+plt.plot(epochs1,validation_loss_classic,linestyle='-', label="SGD")
+plt.plot(epochs2,validation_loss_anderson,linestyle='-', label="SGD + Anderson")         
+plt.yscale('log')
+plt.title('Validation loss function')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+#plt.legend()
+plt.draw()
+plt.savefig('validation_loss_plot')
+plt.tight_layout()
+
+plt.figure()
+plt.plot(epochs1,validation_accuracy_classic,linestyle='-', label="SGD")
+plt.plot(epochs2,validation_accuracy_anderson,linestyle='-', label="SGD + Anderson")
+plt.yscale('log')
+plt.title('Validation accuracy')
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy (%)')
+#plt.legend()
+plt.draw()
+plt.savefig('validation_accuracy_plot')
+plt.tight_layout()
+
