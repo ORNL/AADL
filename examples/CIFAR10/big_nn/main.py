@@ -16,6 +16,7 @@ import AADL as accelerate
 
 import sys
 sys.path.append("../../../utils")
+from gpu_detection import get_gpu
 from monitor_progress_utils import progress_bar
 
 
@@ -145,7 +146,11 @@ parser.add_argument('--resume', '-r', action='store_true',
                     help='resume from checkpoint')
 args = parser.parse_args()
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+# The only reason why I do this workaround (not necessary now) is because
+# I am thinking to the situation where one MPI process has multiple gpus available
+# In that case, the argument passed to get_gpu may be a numberID > 0
+device = get_gpu(0)
+
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
