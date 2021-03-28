@@ -1,4 +1,12 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+@authors: Massimiliano Lupo Pasini (e-mail: lupopasinim@ornl.gov.gov)
+        : Miroslav Stoyanov (e-mail: stoyanovmk@ornl.gov.gov)
+        : Viktor Reshniak (e-mail: reshniakv@ornl.gov.gov)
+"""
 '''Train CIFAR10 with PyTorch.'''
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
