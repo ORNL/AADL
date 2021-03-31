@@ -138,7 +138,6 @@ class Optimization:
         
     def train(self):
         
-        self.initial_performance_evaluation()
         for epoch in range(0, self.num_epochs):
             self.train_epoch(epoch)
             self.validation_epoch(epoch)
