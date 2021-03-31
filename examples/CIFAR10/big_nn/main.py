@@ -248,14 +248,14 @@ optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr,
 scheduler_anderson = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_anderson, T_max=200)
 accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc)
 
-optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, 100)
-optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, 100)
+optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, 20)
+optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, 20)
 
 _, _, validation_loss_classic, validation_accuracy_classic = optimization_classic.train()
 _, _, validation_loss_anderson, validation_accuracy_anderson = optimization_anderson.train()
 
-epochs1 = range(0, len(validation_loss_classic) + 1)
-epochs2 = range(0, len(validation_loss_anderson) + 1)
+epochs1 = range(0, len(validation_loss_classic))
+epochs2 = range(0, len(validation_loss_anderson))
 
 plt.figure()
 plt.plot(epochs1,validation_loss_classic,linestyle='-', label="SGD")
