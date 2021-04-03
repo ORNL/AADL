@@ -2,11 +2,11 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torchcontrib.optim.swa import SWA
 import torch.backends.cudnn as cudnn
 
 import torchvision
 import torchvision.transforms as transforms
-
 import matplotlib.pyplot as plt
 import os
 import argparse
@@ -41,7 +41,7 @@ from vgg import *
 
 class Optimization:
     
-    def __init__(self, network: torch.nn.Module, trainloader: torch.utils.data.DataLoader, testloader: torch.utils.data.DataLoader, optimizer: torch.optim, num_epochs: int):
+    def __init__(self, network: torch.nn.Module, trainloader: torch.utils.data.DataLoader, testloader: torch.utils.data.DataLoader, optimizer: torch.optim, swa:bool, num_epochs: int):
         
         self.trainloader = trainloader
         self.testloader = testloader
@@ -98,6 +98,8 @@ class Optimization:
     
             progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                          % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+            
+            self.optimizer.swap_swa_sgd()
         
         self.training_loss_history.append(train_loss)
         self.training_accuracy_history.append(100.*correct/total)
@@ -140,6 +142,7 @@ class Optimization:
 
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
+parser.add_argument('--swa', default=False, type=bool, help='Average SGD')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true',
                     help='resume from checkpoint')
@@ -220,7 +223,10 @@ if args.resume:
 criterion = nn.CrossEntropyLoss()
 optimizer_classic = optim.SGD(net_classic.parameters(), lr=args.lr,
                       momentum=0.9, weight_decay=5e-4)
-scheduler_classic = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_classic, T_max=200)
+#scheduler_classic = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_classic, T_max=200)
+
+if args.swa:
+    optimizer_classic = SWA(optimizer_classic, swa_start=10, swa_freq=10, swa_lr=0.01)    
 
 # Parameters for Anderson acceleration
 relaxation = 0.1
@@ -230,13 +236,15 @@ store_each_nth = 1
 frequency = store_each_nth
 reg_acc = 1e-8
 
-optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr,
-                      momentum=0.9, weight_decay=5e-4)
-scheduler_anderson = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_anderson, T_max=200)
+optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+#scheduler_anderson = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_anderson, T_max=200)
 accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc)
 
-optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, 100)
-optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, 100)
+if args.swa:
+    optimizer_anderson = SWA(optimizer_anderson, swa_start=10, swa_freq=10, swa_lr=0.01)    
+
+optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, args.swa, 100)
+optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, args.swa, 100)
 
 _, _, validation_loss_classic, validation_accuracy_classic = optimization_classic.train()
 _, _, validation_loss_anderson, validation_accuracy_anderson = optimization_anderson.train()

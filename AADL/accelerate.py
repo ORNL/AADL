@@ -1,5 +1,6 @@
 import torch
 from torch.nn.utils import parameters_to_vector, vector_to_parameters
+import torchcontrib
 from collections import deque
 from types import MethodType
 
@@ -8,6 +9,9 @@ import AADL.anderson_acceleration as anderson
 
 def accelerated_step(self, closure=None):
     self.orig_step(closure)
+    
+    if self.average_weights:
+        self.swap_swa_sgd()
 
     # add current parameters to the history
     self.acc_store_counter += 1
@@ -52,6 +56,11 @@ def accelerate(optimizer, acceleration_type: str = 'anderson_lstsq', relaxation:
 
     optimizer.acc_call_counter  = 0
     optimizer.acc_store_counter = 0
+    
+    if isinstance(optimizer, torchcontrib.optim.swa):
+        optimizer.average_weights = True
+    else:
+        optimizer.average_weights = False
 
     # redefine step of the optimizer
     optimizer.orig_step = optimizer.step
