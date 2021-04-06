@@ -138,15 +138,12 @@ class Optimization:
         
     def train(self):
         
+        self.initial_performance_evaluation()
         for epoch in range(0, self.num_epochs):
-            self.initial_performance_evaluation()
             self.train_epoch(epoch)
             self.validation_epoch(epoch)
             
         return self.training_loss_history, self.training_accuracy_history, self.validation_loss_history, self.validation_accuracy_history
-        
-    
-
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
@@ -216,11 +213,6 @@ net_anderson = deepcopy(net)
 # Map neural networks to aq device if any GPU is available
 net_classic = net_classic.to(device)
 net_anderson = net_anderson.to(device)
-
-if device == 'cuda':
-    net_classic = torch.nn.DataParallel(net_classic)
-    net_anderson = torch.nn.DataParallel(net_anderson)
-    cudnn.benchmark = True
 
 if args.resume:
     # Load checkpoint.
