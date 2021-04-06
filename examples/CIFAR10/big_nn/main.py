@@ -1,4 +1,12 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+@authors: Massimiliano Lupo Pasini (e-mail: lupopasinim@ornl.gov.gov)
+        : Miroslav Stoyanov (e-mail: stoyanovmk@ornl.gov.gov)
+        : Viktor Reshniak (e-mail: reshniakv@ornl.gov.gov)
+"""
 '''Train CIFAR10 with PyTorch.'''
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -16,6 +24,7 @@ import AADL as accelerate
 
 import sys
 sys.path.append("../../../utils")
+from gpu_detection import get_gpu
 from monitor_progress_utils import progress_bar
 
 
@@ -129,15 +138,12 @@ class Optimization:
         
     def train(self):
         
+        self.initial_performance_evaluation()
         for epoch in range(0, self.num_epochs):
-            self.initial_performance_evaluation()
             self.train_epoch(epoch)
             self.validation_epoch(epoch)
             
         return self.training_loss_history, self.training_accuracy_history, self.validation_loss_history, self.validation_accuracy_history
-        
-    
-
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
@@ -145,7 +151,10 @@ parser.add_argument('--resume', '-r', action='store_true',
                     help='resume from checkpoint')
 args = parser.parse_args()
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+# The only reason why I do this workaround (not necessary now) is because
+# I am thinking to the situation where one MPI process has multiple gpus available
+# In that case, the argument passed to get_gpu may be a numberID > 0
+
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
@@ -204,11 +213,6 @@ net_anderson = deepcopy(net)
 net_classic = net_classic.to(device)
 net_anderson = net_anderson.to(device)
 
-if device == 'cuda':
-    net_classic = torch.nn.DataParallel(net_classic)
-    net_anderson = torch.nn.DataParallel(net_anderson)
-    cudnn.benchmark = True
-
 if args.resume:
     # Load checkpoint.
     print('==> Resuming from checkpoint..')
@@ -235,14 +239,14 @@ optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr,
 scheduler_anderson = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_anderson, T_max=200)
 accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc)
 
-optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, 100)
-optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, 100)
+optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, 20)
+optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, 20)
 
 _, _, validation_loss_classic, validation_accuracy_classic = optimization_classic.train()
 _, _, validation_loss_anderson, validation_accuracy_anderson = optimization_anderson.train()
 
-epochs1 = range(0, len(validation_loss_classic) + 1)
-epochs2 = range(0, len(validation_loss_anderson) + 1)
+epochs1 = range(0, len(validation_loss_classic))
+epochs2 = range(0, len(validation_loss_anderson))
 
 plt.figure()
 plt.plot(epochs1,validation_loss_classic,linestyle='-', label="SGD")
