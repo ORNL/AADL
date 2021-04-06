@@ -217,11 +217,6 @@ net_anderson = deepcopy(net)
 net_classic = net_classic.to(device)
 net_anderson = net_anderson.to(device)
 
-if device == 'cuda':
-    net_classic = torch.nn.DataParallel(net_classic)
-    net_anderson = torch.nn.DataParallel(net_anderson)
-    cudnn.benchmark = True
-
 if args.resume:
     # Load checkpoint.
     print('==> Resuming from checkpoint..')
