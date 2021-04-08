@@ -38,6 +38,7 @@ from dpn import *
 from efficientnet import *
 from googlenet import *
 from lenet import *
+from mobilenetv2 import *
 from pnasnet import *
 from preact_resnet import *
 from regnet import *
@@ -195,14 +196,14 @@ print('==> Building model..')
 # net = DenseNet121()
 # net = ResNeXt29_2x64d()
 # net = MobileNet()
-# net = MobileNetV2()
+net = MobileNetV2()
 # net = DPN92()
 # net = ShuffleNetG2()
 # net = SENet18()
 # net = ShuffleNetV2(1)
 # net = EfficientNetB0()
 # net = RegNetX_200MF()
-net = SimpleDLA()
+# net = SimpleDLA()
 
 torch.manual_seed(0)
 
@@ -225,23 +226,23 @@ if args.resume:
 criterion = nn.CrossEntropyLoss()
 optimizer_classic = optim.SGD(net_classic.parameters(), lr=args.lr,
                       momentum=0.9, weight_decay=5e-4)
-scheduler_classic = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_classic, T_max=200)
+#scheduler_classic = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_classic, T_max=200)
 
 # Parameters for Anderson acceleration
 relaxation = 0.1
-wait_iterations = 1
-history_depth = 10
-store_each_nth = 1
+wait_iterations = 3910
+history_depth = 5
+store_each_nth = 391
 frequency = store_each_nth
 reg_acc = 1e-8
 
 optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr,
                       momentum=0.9, weight_decay=5e-4)
-scheduler_anderson = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_anderson, T_max=200)
+#scheduler_anderson = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_anderson, T_max=200)
 accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc)
 
-optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, 20)
-optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, 20)
+optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, 200)
+optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, 200)
 
 _, _, validation_loss_classic, validation_accuracy_classic = optimization_classic.train()
 _, _, validation_loss_anderson, validation_accuracy_anderson = optimization_anderson.train()
