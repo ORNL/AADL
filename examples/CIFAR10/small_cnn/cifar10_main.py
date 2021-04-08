@@ -53,9 +53,9 @@ from numpy.core.defchararray import lower
 
 import numpy
 
-sys.path.append("../../utils")
+sys.path.append("../../../utils")
 from optimizers import FixedPointIteration, DeterministicAcceleration
-sys.path.append("../../model_zoo")
+sys.path.append("../../../model_zoo")
 from NN_models import CNN2D
 from cifar10_dataloader import dataloader
 
