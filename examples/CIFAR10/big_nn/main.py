@@ -189,6 +189,9 @@ testloader = torch.utils.data.DataLoader(
 classes = ('plane', 'car', 'bird', 'cat', 'deer',
            'dog', 'frog', 'horse', 'ship', 'truck')
 
+# All the neural networks included from 194 down are DL models that I want to run on the same dataset, 
+# and test the final accuracy attained by standard optimizers versus the accelerated version with Anderson.
+
 # Model
 print('==> Building model..')
 # net = VGG('VGG19')
