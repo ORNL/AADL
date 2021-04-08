@@ -27,7 +27,9 @@ def accelerated_step(self, closure=None):
 
                 # compute acceleration
                 if self.acc_type == 'anderson':
-                    acc_param = anderson.anderson(X, self.acc_relaxation)
+                    acc_param = anderson.anderson_qr_factorization(X, self.acc_relaxation)
+                elif self.acc_type == 'anderson_normal_equation':
+                    acc_param = anderson.anderson_normal_equation(X, self.acc_relaxation)                    
 
                 # load acceleration back into model and update history
                 vector_to_parameters(acc_param, group['params'])
@@ -35,7 +37,7 @@ def accelerated_step(self, closure=None):
                 group_hist.append(acc_param)
 
 
-def accelerate(optimizer, acceleration_type: str = 'anderson', relaxation: float = 0.1, wait_iterations: int = 1, history_depth: int = 15, store_each_nth: int = 1, frequency: int = 1, reg_acc: float = 0.0):
+def accelerate(optimizer, acceleration_type: str = 'anderson_lstsq', relaxation: float = 0.1, wait_iterations: int = 1, history_depth: int = 15, store_each_nth: int = 1, frequency: int = 1, reg_acc: float = 0.0):
     # acceleration options
     optimizer.acc_type            = acceleration_type.lower()
     optimizer.acc_wait_iterations = wait_iterations
