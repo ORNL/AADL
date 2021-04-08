@@ -154,6 +154,7 @@ args = parser.parse_args()
 # The only reason why I do this workaround (not necessary now) is because
 # I am thinking to the situation where one MPI process has multiple gpus available
 # In that case, the argument passed to get_gpu may be a numberID > 0
+device = get_gpu(0)
 
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
@@ -184,6 +185,9 @@ testloader = torch.utils.data.DataLoader(
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer',
            'dog', 'frog', 'horse', 'ship', 'truck')
+
+# All the neural networks included from 194 down are DL models that I want to run on the same dataset, 
+# and test the final accuracy attained by standard optimizers versus the accelerated version with Anderson.
 
 # Model
 print('==> Building model..')
