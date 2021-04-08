@@ -1,4 +1,12 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+@authors: Massimiliano Lupo Pasini (e-mail: lupopasinim@ornl.gov.gov)
+        : Miroslav Stoyanov (e-mail: stoyanovmk@ornl.gov.gov)
+        : Viktor Reshniak (e-mail: reshniakv@ornl.gov.gov)
+"""
 '''Train CIFAR10 with PyTorch.'''
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -16,6 +24,7 @@ import AADL as accelerate
 
 import sys
 sys.path.append("../../../utils")
+from gpu_detection import get_gpu
 from monitor_progress_utils import progress_bar
 
 
@@ -29,6 +38,7 @@ from dpn import *
 from efficientnet import *
 from googlenet import *
 from lenet import *
+from mobilenetv2 import *
 from pnasnet import *
 from preact_resnet import *
 from regnet import *
@@ -131,15 +141,12 @@ class Optimization:
         
     def train(self):
         
+        self.initial_performance_evaluation()
         for epoch in range(0, self.num_epochs):
-            self.initial_performance_evaluation()
             self.train_epoch(epoch)
             self.validation_epoch(epoch)
             
         return self.training_loss_history, self.training_accuracy_history, self.validation_loss_history, self.validation_accuracy_history
-        
-    
-
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--swa', default=False, type=bool, help='Average SGD')
@@ -148,7 +155,11 @@ parser.add_argument('--resume', '-r', action='store_true',
                     help='resume from checkpoint')
 args = parser.parse_args()
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+# The only reason why I do this workaround (not necessary now) is because
+# I am thinking to the situation where one MPI process has multiple gpus available
+# In that case, the argument passed to get_gpu may be a numberID > 0
+device = get_gpu(0)
+
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
@@ -179,6 +190,9 @@ testloader = torch.utils.data.DataLoader(
 classes = ('plane', 'car', 'bird', 'cat', 'deer',
            'dog', 'frog', 'horse', 'ship', 'truck')
 
+# All the neural networks included from 194 down are DL models that I want to run on the same dataset, 
+# and test the final accuracy attained by standard optimizers versus the accelerated version with Anderson.
+
 # Model
 print('==> Building model..')
 # net = VGG('VGG19')
@@ -188,14 +202,14 @@ print('==> Building model..')
 # net = DenseNet121()
 # net = ResNeXt29_2x64d()
 # net = MobileNet()
-# net = MobileNetV2()
+net = MobileNetV2()
 # net = DPN92()
 # net = ShuffleNetG2()
 # net = SENet18()
 # net = ShuffleNetV2(1)
 # net = EfficientNetB0()
 # net = RegNetX_200MF()
-net = SimpleDLA()
+# net = SimpleDLA()
 
 torch.manual_seed(0)
 
@@ -206,11 +220,6 @@ net_anderson = deepcopy(net)
 # Map neural networks to aq device if any GPU is available
 net_classic = net_classic.to(device)
 net_anderson = net_anderson.to(device)
-
-if device == 'cuda':
-    net_classic = torch.nn.DataParallel(net_classic)
-    net_anderson = torch.nn.DataParallel(net_anderson)
-    cudnn.benchmark = True
 
 if args.resume:
     # Load checkpoint.
@@ -226,13 +235,13 @@ optimizer_classic = optim.SGD(net_classic.parameters(), lr=args.lr,
 #scheduler_classic = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_classic, T_max=200)
 
 if args.swa:
-    optimizer_classic = SWA(optimizer_classic, swa_start=10, swa_freq=10, swa_lr=0.01)    
+    optimizer_classic = SWA(optimizer_classic, swa_start=10, swa_freq=10, swa_lr=args.lr)    
 
 # Parameters for Anderson acceleration
 relaxation = 0.1
-wait_iterations = 1
-history_depth = 10
-store_each_nth = 1
+wait_iterations = 3910
+history_depth = 5
+store_each_nth = 391
 frequency = store_each_nth
 reg_acc = 1e-8
 
@@ -241,16 +250,16 @@ optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr, momentum=0.
 accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc)
 
 if args.swa:
-    optimizer_anderson = SWA(optimizer_anderson, swa_start=10, swa_freq=10, swa_lr=0.01)    
+    optimizer_anderson = SWA(optimizer_anderson, swa_start=10, swa_freq=10, swa_lr=args.lr)    
 
-optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, args.swa, 100)
-optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, args.swa, 100)
+optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, args.swa, 200)
+optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, args.swa, 200)
 
 _, _, validation_loss_classic, validation_accuracy_classic = optimization_classic.train()
 _, _, validation_loss_anderson, validation_accuracy_anderson = optimization_anderson.train()
 
-epochs1 = range(0, len(validation_loss_classic) + 1)
-epochs2 = range(0, len(validation_loss_anderson) + 1)
+epochs1 = range(0, len(validation_loss_classic))
+epochs2 = range(0, len(validation_loss_anderson))
 
 plt.figure()
 plt.plot(epochs1,validation_loss_classic,linestyle='-', label="SGD")
