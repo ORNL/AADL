@@ -2,7 +2,7 @@
 
 import torch
 
-def anderson_lstsq(X, relaxation=1.0):
+def anderson_qr_factorization(X, relaxation=1.0):
     # Anderson Acceleration
     # Take a matrix X of iterates such that X[:,i] = g(X[:,i-1])
     # Return acceleration for X[:,-1]
@@ -37,7 +37,7 @@ def anderson_lstsq(X, relaxation=1.0):
     return extr
 
 
-def anderson_ne(X, relaxation=1.0):
+def anderson_normal_equation(X, relaxation=1.0):
     # Anderson Acceleration
     # Take a matrix X of iterates such that X[:,i] = g(X[:,i-1])
     # Return acceleration for X[:,-1]
