@@ -57,7 +57,7 @@ def accelerate(optimizer, acceleration_type: str = 'anderson_lstsq', relaxation:
     optimizer.acc_call_counter  = 0
     optimizer.acc_store_counter = 0
     
-    if isinstance(optimizer, torchcontrib.optim.swa):
+    if isinstance(optimizer, torchcontrib.optim.swa.SWA):
         optimizer.average_weights = True
     else:
         optimizer.average_weights = False
