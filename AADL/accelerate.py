@@ -11,6 +11,7 @@ def accelerated_step(self, closure=None):
     self.orig_step(closure)
     
     if self.average_weights:
+        self.update_swa()
         self.swap_swa_sgd()
 
     # add current parameters to the history
