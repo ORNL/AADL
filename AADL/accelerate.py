@@ -1,6 +1,6 @@
 import torch
 from torch.nn.utils import parameters_to_vector, vector_to_parameters
-import torchcontrib
+import SWA as SWA
 from collections import deque
 from types import MethodType
 
@@ -57,7 +57,7 @@ def accelerate(optimizer, acceleration_type: str = 'anderson_lstsq', relaxation:
     optimizer.acc_call_counter  = 0
     optimizer.acc_store_counter = 0
     
-    if isinstance(optimizer, torchcontrib.optim.swa.SWA):
+    if isinstance(optimizer, SWA.SWA):
         optimizer.average_weights = True
     else:
         optimizer.average_weights = False

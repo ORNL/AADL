@@ -8,3 +8,9 @@ setup(name="AADL",
       author='Massimiliano Lupo Pasini, Viktor Reshniak, Miroslav Stoyanov',
       author_email='lupopasinim@ornl.gov',)
 
+setup(name="SWA",
+      version='1.0',
+      package_dir={'SWA': 'SWA'},
+      packages=['SWA'],
+      author='Massimiliano Lupo Pasini, Viktor Reshniak, Miroslav Stoyanov',
+      author_email='lupopasinim@ornl.gov',)

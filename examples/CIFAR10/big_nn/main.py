@@ -10,7 +10,6 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torchcontrib.optim.swa as swa
 import torch.backends.cudnn as cudnn
 
 import torchvision
@@ -20,6 +19,7 @@ import os
 import argparse
 from copy import deepcopy
 
+import SWA as SWA
 import AADL as accelerate
 
 import sys
@@ -235,7 +235,7 @@ optimizer_classic = optim.SGD(net_classic.parameters(), lr=args.lr,
 #scheduler_classic = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_classic, T_max=200)
 
 if args.swa:
-    optimizer_classic = swa.SWA(optimizer_classic, swa_start=10, swa_freq=10, swa_lr=args.lr)    
+    optimizer_classic = SWA.SWA(optimizer_classic, swa_start=10, swa_freq=10, swa_lr=args.lr)    
 
 # Parameters for Anderson acceleration
 relaxation = 0.1
@@ -250,7 +250,7 @@ optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr, momentum=0.
 accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc)
 
 if args.swa:
-    optimizer_anderson = swa.SWA(optimizer_anderson, swa_start=10, swa_freq=10, swa_lr=args.lr)    
+    optimizer_anderson = SWA.SWA(optimizer_anderson, swa_start=10, swa_freq=10, swa_lr=args.lr)    
 
 optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, args.swa, 200)
 optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, args.swa, 200)
