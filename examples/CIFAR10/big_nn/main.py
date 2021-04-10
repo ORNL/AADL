@@ -108,7 +108,8 @@ class Optimization:
     
             progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                          % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-            
+
+            self.optimizer.update_swa()            
             self.optimizer.swap_swa_sgd()
         
         self.training_loss_history.append(train_loss)
