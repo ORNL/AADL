@@ -134,7 +134,7 @@ def train_log(*args, **kwargs):
 
 if __name__ == '__main__':
     
-    print("VAFFANCULO: ", args.train_data)
+    print("Dataset folder: ", args.train_data)
     
     # The only reason why I do this workaround (not necessary now) is because
     # I am thinking to the situation where one MPI process has multiple gpus available
