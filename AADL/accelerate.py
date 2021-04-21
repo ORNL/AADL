@@ -6,7 +6,6 @@ from types import MethodType
 
 import AADL.anderson_acceleration as anderson
 
-"""
 def accelerated_step(self, closure=None):
     self.orig_step(closure)
     
@@ -40,10 +39,9 @@ def accelerated_step(self, closure=None):
                 vector_to_parameters(acc_param, group['params'])
                 group_hist.pop()
                 group_hist.append(acc_param)
-"""
                 
                 
-def accelerated_step(self, closure=None):
+def averaged_accelerated_step(self, closure=None):
     self.orig_step(closure)
     
     if self.average_weights:
@@ -84,7 +82,7 @@ def accelerated_step(self, closure=None):
                 group_hist.append(acc_param)                
 
 
-def accelerate(optimizer, acceleration_type: str = 'anderson_lstsq', relaxation: float = 0.1, wait_iterations: int = 1, history_depth: int = 15, store_each_nth: int = 1, frequency: int = 1, reg_acc: float = 0.0):
+def accelerate(optimizer, acceleration_type: str = 'anderson_lstsq', relaxation: float = 0.1, wait_iterations: int = 1, history_depth: int = 15, store_each_nth: int = 1, frequency: int = 1, reg_acc: float = 0.0, average : bool = False):
     # acceleration options
     optimizer.acc_type            = acceleration_type.lower()
     optimizer.acc_wait_iterations = wait_iterations
@@ -108,7 +106,11 @@ def accelerate(optimizer, acceleration_type: str = 'anderson_lstsq', relaxation:
 
     # redefine step of the optimizer
     optimizer.orig_step = optimizer.step
-    optimizer.step      = MethodType(accelerated_step, optimizer)
+    
+    if average:
+       optimizer.step      = MethodType(averaged_accelerated_step, optimizer)
+    else:
+       optimizer.step      = MethodType(accelerated_step, optimizer)
 
     return optimizer
 

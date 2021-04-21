@@ -173,6 +173,11 @@ class FixedPointIteration(object):
 
         if optimizer_string.lower() == 'sgd':
             self.optimizer = torch.optim.SGD(self.model.get_model().parameters(), lr=self.lr,
+                                             weight_decay=self.weight_decay, momentum=0.9)
+            self.optimizer_str = optimizer_string.lower()
+            self.optimizer_specified = True
+        elif optimizer_string.lower() == 'asgd':
+            self.optimizer = torch.optim.ASGD(self.model.get_model().parameters(), lr=self.lr,
                                              weight_decay=self.weight_decay)
             self.optimizer_str = optimizer_string.lower()
             self.optimizer_specified = True
@@ -207,7 +212,7 @@ class FixedPointIteration(object):
 class DeterministicAcceleration(FixedPointIteration):
     def __init__(self,training_dataloader: torch.utils.data.dataloader.DataLoader,validation_dataloader: torch.utils.data.dataloader.DataLoader,
         acceleration_type: str = 'anderson',learning_rate: float = 1e-3,relaxation: float = 0.1,weight_decay: float = 0.0,
-        wait_iterations: int = 1, history_depth: int = 15, frequency: int = 1, reg_acc: float = 0.0, store_each_nth: int = 1, verbose: bool = False):
+        wait_iterations: int = 1, history_depth: int = 15, frequency: int = 1, reg_acc: float = 0.0, store_each_nth: int = 1, average: bool = False, verbose: bool = False):
 
         """
 
@@ -222,6 +227,7 @@ class DeterministicAcceleration(FixedPointIteration):
         :type frequency: int
         :type reg_acc: float
         :type store_each_nth: int
+        :type average: bool
         :type verbose: bool
         """
 
@@ -233,9 +239,10 @@ class DeterministicAcceleration(FixedPointIteration):
         self.history_depth = history_depth
         self.frequency = frequency
         self.reg_acc = reg_acc
+        self.average = average
 
     def set_optimizer(self, optimizer_string):
         super(DeterministicAcceleration, self).set_optimizer(optimizer_string)
-        accelerate.accelerate(self.optimizer, self.acceleration_type, self.relaxation, self.wait_iterations, self.history_depth, self.store_each_nth, self.frequency, self.reg_acc)
+        accelerate.accelerate(self.optimizer, self.acceleration_type, self.relaxation, self.wait_iterations, self.history_depth, self.store_each_nth, self.frequency, self.reg_acc, self.average)
             
 
