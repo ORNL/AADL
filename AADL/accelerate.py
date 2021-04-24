@@ -9,10 +9,6 @@ import AADL.anderson_acceleration as anderson
 def accelerated_step(self, closure=None):
     self.orig_step(closure)
     
-    if self.average_weights:
-        self.update_swa()
-        self.swap_swa_sgd()
-
     # add current parameters to the history
     self.acc_store_counter += 1
     if self.acc_store_counter >= self.acc_store_each_nth:
@@ -40,14 +36,29 @@ def accelerated_step(self, closure=None):
                 group_hist.pop()
                 group_hist.append(acc_param)
                 
-                
+
+def averaged_step(self, closure=None):
+    self.orig_step(closure)
+    
+    for group, group_hist in zip(self.param_groups, self.avg_param_hist):
+        group_hist.append(parameters_to_vector(group['params']).detach())    
+        
+    #perform moving average
+    for group, group_hist in zip(self.param_groups, self.avg_param_hist):
+        if len(avg_group_hist)==3:
+            X = torch.stack(list(group_hist), dim=1)
+            average = torch.mean(X, dim=1)
+            
+            # load acceleration back into model and update history
+            vector_to_parameters(average, group['params'])
+
+            for i in range(0,3):
+                avg_group_hist.pop()
+            
+
 def averaged_accelerated_step(self, closure=None):
     self.orig_step(closure)
     
-    if self.average_weights:
-        self.update_swa()
-        self.swap_swa_sgd()
-        
     for group, group_hist in zip(self.param_groups, self.avg_param_hist):
         group_hist.append(parameters_to_vector(group['params']).detach())    
         
@@ -80,9 +91,10 @@ def averaged_accelerated_step(self, closure=None):
                 vector_to_parameters(acc_param, group['params'])
                 group_hist.pop()
                 group_hist.append(acc_param)                
+                
 
 
-def accelerate(optimizer, acceleration_type: str = 'anderson_lstsq', relaxation: float = 0.1, wait_iterations: int = 1, history_depth: int = 15, store_each_nth: int = 1, frequency: int = 1, reg_acc: float = 0.0, average : bool = False):
+def accelerate(optimizer, acceleration_type: str = "identity", relaxation: float = 0.1, wait_iterations: int = 1, history_depth: int = 15, store_each_nth: int = 1, frequency: int = 1, reg_acc: float = 0.0, average : bool = False):
     # acceleration options
     optimizer.acc_type            = acceleration_type.lower()
     optimizer.acc_wait_iterations = wait_iterations
@@ -99,18 +111,15 @@ def accelerate(optimizer, acceleration_type: str = 'anderson_lstsq', relaxation:
     optimizer.acc_call_counter  = 0
     optimizer.acc_store_counter = 0
     
-    if isinstance(optimizer, SWA.SWA):
-        optimizer.average_weights = True
-    else:
-        optimizer.average_weights = False
-
     # redefine step of the optimizer
     optimizer.orig_step = optimizer.step
     
-    if average:
+    if average and acceleration_type!="identity":
        optimizer.step      = MethodType(averaged_accelerated_step, optimizer)
-    else:
+    elif  not(average) and acceleration_type!="identity":
        optimizer.step      = MethodType(accelerated_step, optimizer)
+    elif average and acceleration_type=="identity":
+       optimizer.step      = MethodType(averaged_step, optimizer)
 
     return optimizer
 

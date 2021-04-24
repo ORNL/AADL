@@ -51,7 +51,7 @@ from vgg import *
 
 class Optimization:
     
-    def __init__(self, network: torch.nn.Module, trainloader: torch.utils.data.DataLoader, testloader: torch.utils.data.DataLoader, optimizer: torch.optim, swa:bool, num_epochs: int):
+    def __init__(self, network: torch.nn.Module, trainloader: torch.utils.data.DataLoader, testloader: torch.utils.data.DataLoader, optimizer: torch.optim, num_epochs: int):
         
         self.trainloader = trainloader
         self.testloader = testloader
@@ -108,10 +108,7 @@ class Optimization:
     
             progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                          % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-
-            self.optimizer.update_swa()            
-            self.optimizer.swap_swa_sgd()
-        
+ 
         self.training_loss_history.append(train_loss)
         self.training_accuracy_history.append(100.*correct/total)
             
@@ -150,7 +147,6 @@ class Optimization:
         return self.training_loss_history, self.training_accuracy_history, self.validation_loss_history, self.validation_accuracy_history
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
-parser.add_argument('--swa', default=False, type=bool, help='Average SGD')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true',
                     help='resume from checkpoint')
@@ -197,7 +193,7 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer',
 # Model
 print('==> Building model..')
 # net = VGG('VGG19')
-# net = ResNet18()
+net = ResNet18()
 # net = PreActResNet18()
 # net = GoogLeNet()
 # net = DenseNet121()
@@ -210,7 +206,7 @@ print('==> Building model..')
 # net = ShuffleNetV2(1)
 # net = EfficientNetB0()
 # net = RegNetX_200MF()
-net = SimpleDLA()
+# net = SimpleDLA()
 
 torch.manual_seed(0)
 
@@ -235,9 +231,6 @@ optimizer_classic = optim.SGD(net_classic.parameters(), lr=args.lr,
                       momentum=0.9, weight_decay=5e-4)
 #scheduler_classic = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_classic, T_max=200)
 
-if args.swa:
-    optimizer_classic = SWA.SWA(optimizer_classic, swa_start=1, swa_freq=1, swa_lr=args.lr)    
-
 # Parameters for Anderson acceleration
 relaxation = 0.1
 wait_iterations = 3910
@@ -245,16 +238,14 @@ history_depth = 5
 store_each_nth = 391
 frequency = store_each_nth
 reg_acc = 1e-8
+average = True
 
 optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 #scheduler_anderson = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_anderson, T_max=200)
-accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc)
+accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc, average)
 
-if args.swa:
-    optimizer_anderson = SWA.SWA(optimizer_anderson, swa_start=1, swa_freq=1, swa_lr=args.lr)    
-
-optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, args.swa, 200)
-optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, args.swa, 200)
+optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, 200)
+optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, 200)
 
 _, _, validation_loss_classic, validation_accuracy_classic = optimization_classic.train()
 _, _, validation_loss_anderson, validation_accuracy_anderson = optimization_anderson.train()
