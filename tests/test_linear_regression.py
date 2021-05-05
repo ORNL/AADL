@@ -68,10 +68,10 @@ def linear_data(slope, intercept, num_points: int = 10):
 def linear_regression(slope, intercept, num_points, optimizer_str):
     input_dim, output_dim, dataset = linear_data(slope, intercept, num_points)
     use_bias = True
-    learning_rate = 1e-3
+    learning_rate = 0.01
     weight_decay = 0.0
     batch_size = 1
-    epochs = 10000
+    epochs = 1000
     threshold = 1e-8
 
     training_dataloader = torch.utils.data.DataLoader(dataset, batch_size)
@@ -91,25 +91,27 @@ def linear_regression(slope, intercept, num_points, optimizer_str):
 
 def linear_regression_anderson(slope, intercept, num_points, optimizer_str):
     input_dim, output_dim, dataset = linear_data(slope, intercept, num_points)
+    acceleration_type = "anderson"
     use_bias = True
-    learning_rate = 1e-3
-    relaxation = 0.5
+    learning_rate = 0.01
+    relaxation = 1.0
     weight_decay = 0.0
     batch_size = 1
-    epochs = 10000
+    epochs = 1000
     threshold = 1e-8
     wait_iterations = 1
-    history_depth = 3
-    frequency = 100
+    history_depth = 5
+    frequency = 2
     reg_acc = 1e-9
     store_each_nth = frequency
+    average = True
 
     training_dataloader = torch.utils.data.DataLoader(dataset, batch_size)
     validation_dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
     model = LinearRegression(input_dim, output_dim, use_bias)
-    optimizer_anderson = DeterministicAcceleration(training_dataloader,validation_dataloader,'anderson',learning_rate,relaxation,weight_decay,wait_iterations,history_depth,
-        frequency,reg_acc,store_each_nth)
+    optimizer_anderson = DeterministicAcceleration(training_dataloader,validation_dataloader,acceleration_type,learning_rate,relaxation,weight_decay,wait_iterations,history_depth,
+        frequency,reg_acc,store_each_nth, average)
     optimizer_anderson.import_model(model)
     optimizer_anderson.set_loss_function('mse')
     optimizer_anderson.set_optimizer(optimizer_str)
@@ -121,7 +123,7 @@ def linear_regression_anderson(slope, intercept, num_points, optimizer_str):
 
 
 def test_linear_regression(optimiser):
-    num_points = 2
+    num_points = 100
     straight_line_parameters = torch.ones(2, 1)
     slope = straight_line_parameters[0].item()
     intercept = straight_line_parameters[1].item()
@@ -132,7 +134,7 @@ def test_linear_regression(optimiser):
 
 
 def test_linear_regression_anderson(optimiser):
-    num_points = 2
+    num_points = 100
     straight_line_parameters = torch.ones(2, 1)
     slope = straight_line_parameters[0].item()
     intercept = straight_line_parameters[1].item()
@@ -152,6 +154,9 @@ class TestLinearRegression(unittest.TestCase):
     def test_sgd(self):
         test_linear_regression('sgd')
 
+    def test_asgd(self):
+        test_linear_regression('asgd')
+
     def test_rmsprop(self):
         test_linear_regression('rmsprop')
 
@@ -161,6 +166,9 @@ class TestLinearRegression(unittest.TestCase):
     def test_sgd_anderson(self):
         test_linear_regression_anderson('sgd')
  
+    def test_asgd_anderson(self):
+        test_linear_regression_anderson('asgd')
+
     def test_rmsprop_anderson(self):
         test_linear_regression_anderson('rmsprop')
 

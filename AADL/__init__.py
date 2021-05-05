@@ -1,1 +1,1 @@
-from .accelerate import accelerate
+from .accelerate import accelerate

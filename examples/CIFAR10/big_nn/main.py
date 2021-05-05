@@ -14,7 +14,6 @@ import torch.backends.cudnn as cudnn
 
 import torchvision
 import torchvision.transforms as transforms
-
 import matplotlib.pyplot as plt
 import os
 import argparse
@@ -108,7 +107,7 @@ class Optimization:
     
             progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                          % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-        
+ 
         self.training_loss_history.append(train_loss)
         self.training_accuracy_history.append(100.*correct/total)
             
@@ -193,13 +192,13 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer',
 # Model
 print('==> Building model..')
 # net = VGG('VGG19')
-# net = ResNet18()
+net = ResNet18()
 # net = PreActResNet18()
 # net = GoogLeNet()
 # net = DenseNet121()
 # net = ResNeXt29_2x64d()
 # net = MobileNet()
-net = MobileNetV2()
+# net = MobileNetV2()
 # net = DPN92()
 # net = ShuffleNetG2()
 # net = SENet18()
@@ -238,11 +237,11 @@ history_depth = 5
 store_each_nth = 391
 frequency = store_each_nth
 reg_acc = 1e-8
+average = True
 
-optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr,
-                      momentum=0.9, weight_decay=5e-4)
+optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 #scheduler_anderson = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_anderson, T_max=200)
-accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc)
+accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc, average)
 
 optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, 200)
 optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, 200)
