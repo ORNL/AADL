@@ -19,7 +19,6 @@ import os
 import argparse
 from copy import deepcopy
 
-import SWA as SWA
 import AADL as accelerate
 
 import sys
