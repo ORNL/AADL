@@ -49,7 +49,7 @@ class Bottleneck(nn.Module):
 
 
 class ShuffleNet(nn.Module):
-    def __init__(self, cfg):
+    def __init__(self, cfg, num_classes = 100):
         super(ShuffleNet, self).__init__()
         out_planes = cfg['out_planes']
         num_blocks = cfg['num_blocks']
@@ -61,7 +61,7 @@ class ShuffleNet(nn.Module):
         self.layer1 = self._make_layer(out_planes[0], num_blocks[0], groups)
         self.layer2 = self._make_layer(out_planes[1], num_blocks[1], groups)
         self.layer3 = self._make_layer(out_planes[2], num_blocks[2], groups)
-        self.linear = nn.Linear(out_planes[2], 10)
+        self.linear = nn.Linear(out_planes[2], 100)
 
     def _make_layer(self, out_planes, num_blocks, groups):
         layers = []
