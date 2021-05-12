@@ -118,11 +118,11 @@ class FixedPointIteration(object):
                     output = self.model.forward(data)
                     loss = self.criterion(output, target)
                     val_loss = val_loss + loss
-                    
-                    if self.loss_name == 'nll':                    
+
+                    if self.loss_name == 'nll':
                         pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
                         correct += pred.eq(target.view_as(pred)).sum().item()
-                    
+
 
                 val_loss = val_loss / count_val
 
@@ -143,7 +143,7 @@ class FixedPointIteration(object):
                     )
                     self.validation_accuracy.append(100.0 * correct / len(self.validation_dataloader.dataset))
                     self.print_verbose("###############################")
-                
+
                 value_loss = val_loss
             epoch_counter = epoch_counter + 1
 
@@ -156,6 +156,9 @@ class FixedPointIteration(object):
             self.criterion_specified = True
         elif criterion_string.lower() == 'nll':
             self.criterion = torch.nn.functional.nll_loss
+            self.criterion_specified = True
+        elif criterion_string.lower() == 'linear':
+            self.criterion = lambda x, y: (x - y).sum()
             self.criterion_specified = True
         else:
             raise ValueError("Loss function is not recognized: currently only MSE and CE are allowed")
@@ -244,5 +247,5 @@ class DeterministicAcceleration(FixedPointIteration):
     def set_optimizer(self, optimizer_string):
         super(DeterministicAcceleration, self).set_optimizer(optimizer_string)
         accelerate.accelerate(self.optimizer, self.acceleration_type, self.relaxation, self.wait_iterations, self.history_depth, self.store_each_nth, self.frequency, self.reg_acc, self.average)
-            
+
 

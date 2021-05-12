@@ -5,7 +5,7 @@ import unittest
 sys.path.append('../utils')
 from optimizers import FixedPointIteration, DeterministicAcceleration
 sys.path.append('../model_zoo')
-from Paraboloid_models import Paraboloid
+from TestFunctions_models import Paraboloid
 
 
 ###############################################################################
@@ -95,8 +95,8 @@ class TestMultiscaleParaboloid(unittest.TestCase):
         weight_sum, history = test_multiscale_paraboloid_anderson(dim=2, condition_number=1, optimizer='adam', lr=1.e-3, epochs=10000)
         print("Well conditioned problem - 2d Adam + Anderson finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
-   
-    
+
+
     ###########
 
 
@@ -114,8 +114,8 @@ class TestMultiscaleParaboloid(unittest.TestCase):
         weight_sum, history = test_multiscale_paraboloid_anderson(dim=100, condition_number=1, optimizer='adam', lr=1.e-3, epochs=10000)
         print("Well conditioned problem - 100d Adam finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
-    
-    
+
+
     ###########
 
 
@@ -133,8 +133,8 @@ class TestMultiscaleParaboloid(unittest.TestCase):
         weight_sum, history = test_multiscale_paraboloid_anderson(dim=100, condition_number=1, optimizer='adam', lr=1.e-3, epochs=10000)
         print("Well conditioned problem - 100d Adam + Anderson finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
-      
-        
+
+
     ###########
 
 
@@ -152,8 +152,8 @@ class TestMultiscaleParaboloid(unittest.TestCase):
         weight_sum, history = test_multiscale_paraboloid(dim=100, condition_number=1.e3, optimizer='adam', lr=1.e-3, epochs=10000)
         print("Ill conditioned problem - 100d Adam finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
-    
-    
+
+
     ###########
 
 
@@ -171,7 +171,7 @@ class TestMultiscaleParaboloid(unittest.TestCase):
         weight_sum, history = test_multiscale_paraboloid_anderson(dim=100, condition_number=1.e3, optimizer='adam', lr=1.e-3, epochs=10000)
         print("Ill conditioned problem - 100d Adam + Anderson finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
-        
+
 
 
 ###############################################################################
