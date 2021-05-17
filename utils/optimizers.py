@@ -160,6 +160,10 @@ class FixedPointIteration(object):
         elif criterion_string.lower() == 'linear':
             self.criterion = lambda x, y: (x - y).sum()
             self.criterion_specified = True
+        elif criterion_string.lower() == 'nonconvex':
+            self.criterion = lambda x, y: (((y - x)**2) + 0.1*(y**2 - x**2)**2).sum()
+            #self.criterion = lambda x, y: (((y - x)**2)).sum()
+            self.criterion_specified = True            
         else:
             raise ValueError("Loss function is not recognized: currently only MSE and CE are allowed")
         self.loss_name = criterion_string
