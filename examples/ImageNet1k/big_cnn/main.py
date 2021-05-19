@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
+import torch.distributed as dist
 
 import torchvision
 import torchvision.transforms as transforms
@@ -28,6 +29,21 @@ from monitor_progress_utils import progress_bar
 sys.path.append("../")
 from dataloader import imagenet_data
 
+def setup_ddp():
+
+    """"Initialize DDP"""
+
+    backend = "nccl" if torch.cuda.is_available() else "gloo"
+
+    master_addr = '127.0.0.1'
+    master_port = '8889'
+    world_size = os.environ['OMPI_COMM_WORLD_SIZE']
+    world_rank = os.environ['OMPI_COMM_WORLD_RANK']
+    os.environ['MASTER_ADDR'] = master_addr
+    os.environ['MASTER_PORT'] = master_port
+    os.environ['WORLD_SIZE'] = world_size
+    os.environ['RANK'] = world_rank
+    dist.init_process_group(backend=backend, rank=int(world_rank), world_size=int(world_size))
 
 # Import paths to NN models that can be used for object classification
 import sys
@@ -212,7 +228,9 @@ net_anderson = deepcopy(net)
 
 # Map neural networks to aq device if any GPU is available
 net_classic = net_classic.to(device)
+net_classic = nn.parallel.DistributedDataParallel(net_classic)
 net_anderson = net_anderson.to(device)
+net_anderson = nn.parallel.DistributedDataParallel(net_anderson)
 
 if args.resume:
     # Load checkpoint.
