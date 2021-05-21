@@ -25,7 +25,7 @@ import AADL as accelerate
 import sys
 sys.path.append("../../../utils")
 from gpu_detection import get_gpu
-from monitor_progress_utils import progress_bar
+#from monitor_progress_utils import progress_bar
 sys.path.append("../")
 from dataloader import imagenet_data
 
@@ -87,7 +87,7 @@ class Optimization:
         total = 0
         
         for batch_idx, (inputs, targets) in enumerate(trainloader):
-            inputs, targets = inputs.to(device), targets.to(device)
+            inputs, targets = inputs.to(self.network.device), targets.to(self.network.device)
             outputs = self.network(inputs)
             loss = criterion(outputs, targets)
     
@@ -111,7 +111,7 @@ class Optimization:
         correct = 0
         total = 0
         for batch_idx, (inputs, targets) in enumerate(trainloader):
-            inputs, targets = inputs.to(device), targets.to(device)
+            inputs, targets = inputs.to(self.network.device), targets.to(self.network.device)
             self.optimizer.zero_grad()
             outputs = self.network(inputs)
             loss = criterion(outputs, targets)
@@ -123,8 +123,7 @@ class Optimization:
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
     
-            progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                         % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+            #progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)' % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
  
         self.training_loss_history.append(train_loss)
         self.training_accuracy_history.append(100.*correct/total)
@@ -138,7 +137,7 @@ class Optimization:
         total = 0
         with torch.no_grad():
             for batch_idx, (inputs, targets) in enumerate(testloader):
-                inputs, targets = inputs.to(device), targets.to(device)
+                inputs, targets = inputs.to(self.network.device), targets.to(self.network.device)
                 outputs = self.network(inputs)
                 loss = criterion(outputs, targets)
     
@@ -147,8 +146,7 @@ class Optimization:
                 total += targets.size(0)
                 correct += predicted.eq(targets).sum().item()
     
-                progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                             % (validation_loss/(batch_idx+1), 100.*correct/total, correct, total))      
+                #progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)' % (validation_loss/(batch_idx+1), 100.*correct/total, correct, total))      
             
         self.validation_loss_history.append(validation_loss) 
         self.validation_accuracy_history.append(100.*correct/total)    
@@ -157,6 +155,7 @@ class Optimization:
     def train(self):
         
         self.initial_performance_evaluation()
+        print("MASSI")
         for epoch in range(0, self.num_epochs):
             self.train_epoch(epoch)
             self.validation_epoch(epoch)
@@ -169,10 +168,14 @@ parser.add_argument('--resume', '-r', action='store_true',
                     help='resume from checkpoint')
 args = parser.parse_args()
 
+setup_ddp()
+
 # The only reason why I do this workaround (not necessary now) is because
 # I am thinking to the situation where one MPI process has multiple gpus available
 # In that case, the argument passed to get_gpu may be a numberID > 0
-device = get_gpu(0)
+world_size = os.environ['OMPI_COMM_WORLD_SIZE']
+world_rank = os.environ['OMPI_COMM_WORLD_RANK']
+#device = get_gpu(world_rank)
 
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
@@ -192,12 +195,12 @@ transform_test = transforms.Compose([
 ])
 
 trainset = imagenet_data(type="train")
-trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=128, shuffle=True)
+train_sampler = torch.utils.data.distributed.DistributedSampler(trainset)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=False, sampler=train_sampler)
 
 testset = imagenet_data(type="val")
-testloader = torch.utils.data.DataLoader(
-    testset, batch_size=100, shuffle=False)
+test_sampler = torch.utils.data.distributed.DistributedSampler(testset)
+testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, sampler=test_sampler)
 
 # All the neural networks included from 194 down are DL models that I want to run on the same dataset, 
 # and test the final accuracy attained by standard optimizers versus the accelerated version with Anderson.
@@ -227,20 +230,12 @@ net_classic = deepcopy(net)
 net_anderson = deepcopy(net)
 
 # Map neural networks to aq device if any GPU is available
-net_classic = net_classic.to(device)
-net_classic = nn.parallel.DistributedDataParallel(net_classic)
-net_anderson = net_anderson.to(device)
-net_anderson = nn.parallel.DistributedDataParallel(net_anderson)
+net_classic = net_classic.to('cuda:'+world_rank)
+net_classic = nn.parallel.DistributedDataParallel(net_classic, device_ids=['cuda:'+world_rank])
+net_anderson = net_anderson.to('cuda:'+world_rank)
+net_anderson = nn.parallel.DistributedDataParallel(net_anderson, device_ids=['cuda:'+world_rank])
 
-if args.resume:
-    # Load checkpoint.
-    print('==> Resuming from checkpoint..')
-    assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-    checkpoint = torch.load('./checkpoint/ckpt.pth')
-    best_acc = checkpoint['acc']
-    start_epoch = checkpoint['epoch']
-
-criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss().cuda('cuda:'+world_rank)
 optimizer_classic = optim.SGD(net_classic.parameters(), lr=args.lr,
                       momentum=0.9, weight_decay=5e-4)
 #scheduler_classic = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_classic, T_max=200)
