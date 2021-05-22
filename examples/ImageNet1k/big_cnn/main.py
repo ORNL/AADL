@@ -105,7 +105,6 @@ class Optimization:
     # Training
     def train_epoch(self, epoch):
         
-        print('\nEpoch: %d' % epoch)
         self.network.train()
         train_loss = 0
         correct = 0
@@ -146,7 +145,8 @@ class Optimization:
                 total += targets.size(0)
                 correct += predicted.eq(targets).sum().item()
     
-                #progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)' % (validation_loss/(batch_idx+1), 100.*correct/total, correct, total))      
+            
+            #progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)' % (validation_loss/(batch_idx+1), 100.*correct/total, correct, total))      
             
         self.validation_loss_history.append(validation_loss) 
         self.validation_accuracy_history.append(100.*correct/total)    
@@ -155,17 +155,15 @@ class Optimization:
     def train(self):
         
         self.initial_performance_evaluation()
-        print("MASSI")
         for epoch in range(0, self.num_epochs):
             self.train_epoch(epoch)
             self.validation_epoch(epoch)
             
         return self.training_loss_history, self.training_accuracy_history, self.validation_loss_history, self.validation_accuracy_history
 
-parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
+parser = argparse.ArgumentParser(description='PyTorch ImageNet1k Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
-parser.add_argument('--resume', '-r', action='store_true',
-                    help='resume from checkpoint')
+
 args = parser.parse_args()
 
 setup_ddp()
@@ -175,7 +173,6 @@ setup_ddp()
 # In that case, the argument passed to get_gpu may be a numberID > 0
 world_size = os.environ['OMPI_COMM_WORLD_SIZE']
 world_rank = os.environ['OMPI_COMM_WORLD_RANK']
-#device = get_gpu(world_rank)
 
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
@@ -262,27 +259,30 @@ _, _, validation_loss_anderson, validation_accuracy_anderson = optimization_ande
 epochs1 = range(0, len(validation_loss_classic))
 epochs2 = range(0, len(validation_loss_anderson))
 
-plt.figure()
-plt.plot(epochs1,validation_loss_classic,linestyle='-', label="SGD")
-plt.plot(epochs2,validation_loss_anderson,linestyle='-', label="SGD + Anderson")         
-plt.yscale('log')
-plt.title('Validation loss function')
-plt.xlabel('Epochs')
-plt.ylabel('Loss')
-#plt.legend()
-plt.draw()
-plt.savefig('validation_loss_plot')
-plt.tight_layout()
+# Only MPI process with rank 0 generates the plot
+if world_rank == 0:
 
-plt.figure()
-plt.plot(epochs1,validation_accuracy_classic,linestyle='-', label="SGD")
-plt.plot(epochs2,validation_accuracy_anderson,linestyle='-', label="SGD + Anderson")
-plt.yscale('log')
-plt.title('Validation accuracy')
-plt.xlabel('Epochs')
-plt.ylabel('Accuracy (%)')
-#plt.legend()
-plt.draw()
-plt.savefig('validation_accuracy_plot')
-plt.tight_layout()
-
+    plt.figure()
+    plt.plot(epochs1,validation_loss_classic,linestyle='-', label="SGD")
+    plt.plot(epochs2,validation_loss_anderson,linestyle='-', label="SGD + Anderson")         
+    plt.yscale('log')
+    plt.title('Validation loss function')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    #plt.legend()
+    plt.draw()
+    plt.savefig('validation_loss_plot')
+    plt.tight_layout()
+    
+    plt.figure()
+    plt.plot(epochs1,validation_accuracy_classic,linestyle='-', label="SGD")
+    plt.plot(epochs2,validation_accuracy_anderson,linestyle='-', label="SGD + Anderson")
+    plt.yscale('log')
+    plt.title('Validation accuracy')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy (%)')
+    #plt.legend()
+    plt.draw()
+    plt.savefig('validation_accuracy_plot')
+    plt.tight_layout()
+    
