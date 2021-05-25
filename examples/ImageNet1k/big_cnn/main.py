@@ -79,6 +79,7 @@ class Optimization:
         self.training_accuracy_history = []
         self.validation_loss_history = []
         self.validation_accuracy_history = []
+        self.lr = self.optimizer.param_groups[0]['lr']
         
     def initial_performance_evaluation(self):
         
@@ -109,6 +110,16 @@ class Optimization:
         train_loss = 0
         correct = 0
         total = 0
+        
+        # warm-up value for learning rate 
+        if epoch <= 5:
+            for g in self.optimizer.param_groups:
+                g['lr'] = 1e-4
+        else:
+            for g in self.optimizer.param_groups:
+                g['lr'] = self.lr            
+        
+        
         for batch_idx, (inputs, targets) in enumerate(trainloader):
             inputs, targets = inputs.to(self.network.device), targets.to(self.network.device)
             self.optimizer.zero_grad()
@@ -218,7 +229,7 @@ print('==> Building model..')
 # net = ShuffleNetV2( num_classes = 1000 )
 # net = EfficientNetB0( num_classes = 1000 )
 # net = RegNetX_200MF( num_classes = 1000 )
-net = SimpleDLA( num_classes = 1000 )
+# net = SimpleDLA( num_classes = 1000 )
 
 torch.manual_seed(0)
 
@@ -233,8 +244,7 @@ net_anderson = net_anderson.to('cuda:'+world_rank)
 net_anderson = nn.parallel.DistributedDataParallel(net_anderson, device_ids=['cuda:'+world_rank])
 
 criterion = nn.CrossEntropyLoss().cuda('cuda:'+world_rank)
-optimizer_classic = optim.SGD(net_classic.parameters(), lr=args.lr,
-                      momentum=0.9, weight_decay=5e-4)
+optimizer_classic = optim.SGD(net_classic.parameters(), lr=args.lr*int(math.sqrt(world_size)), momentum=0.9, weight_decay=5e-4)
 #scheduler_classic = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_classic, T_max=200)
 
 # Parameters for Anderson acceleration
@@ -246,7 +256,7 @@ frequency = store_each_nth
 reg_acc = 1e-8
 average = True
 
-optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr*int(math.sqrt(world_size)), momentum=0.9, weight_decay=5e-4)
 #scheduler_anderson = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_anderson, T_max=200)
 accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc, average)
 
