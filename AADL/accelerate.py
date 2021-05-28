@@ -45,7 +45,7 @@ def averaged_step(self, closure=None):
         
     #perform moving average
     for group, group_hist in zip(self.param_groups, self.avg_param_hist):
-        if len(avg_group_hist)==3:
+        if len(self.avg_param_hist)==3:
             X = torch.stack(list(group_hist), dim=1)
             average = torch.mean(X, dim=1)
             
@@ -53,7 +53,7 @@ def averaged_step(self, closure=None):
             vector_to_parameters(average, group['params'])
 
             for i in range(0,3):
-                avg_group_hist.pop()
+                self.avg_param_hist.pop()
             
 
 def averaged_accelerated_step(self, closure=None):

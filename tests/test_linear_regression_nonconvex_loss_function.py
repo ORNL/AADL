@@ -98,7 +98,7 @@ def linear_regression(slope, intercept, num_points, optimizer_str):
 
 def linear_regression_anderson(slope, intercept, num_points, optimizer_str):
     input_dim, output_dim, dataset = linear_data(slope, intercept, num_points)
-    acceleration_type = "anderson_normal_equation"
+    acceleration_type = "identity"
     use_bias = True
     learning_rate = 1e-4
     relaxation = 1.0
@@ -107,7 +107,7 @@ def linear_regression_anderson(slope, intercept, num_points, optimizer_str):
     epochs = 1000
     threshold = 1e-8
     wait_iterations = 1
-    history_depth = 5
+    history_depth = 10
     frequency = 5   
     reg_acc = 1e-9
     store_each_nth = frequency
