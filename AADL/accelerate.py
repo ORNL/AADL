@@ -31,10 +31,21 @@ def accelerated_step(self, closure=None):
                 elif self.acc_type == 'anderson_normal_equation':
                     acc_param = anderson.anderson_normal_equation(X, self.acc_relaxation)                    
 
+                # loss after non-accelerated optimizer
+                if closure is not None:
+                    orig_loss = closure()
                 # load acceleration back into model and update history
                 vector_to_parameters(acc_param, group['params'])
-                group_hist.pop()
-                group_hist.append(acc_param)
+                if closure is not None:
+                    # loss after accelerated optimizer
+                    acc_loss = closure()
+                    # safeguarding
+                    if acc_loss < orig_loss:
+                        group_hist.pop()
+                        group_hist.append(acc_param)
+                    else:
+                        # revert to non-accelerated params
+                        vector_to_parameters(group_hist[-1], group['params'])
                 
 
 def averaged_step(self, closure=None):
@@ -87,10 +98,21 @@ def averaged_accelerated_step(self, closure=None):
                 elif self.acc_type == 'anderson_normal_equation':
                     acc_param = anderson.anderson_normal_equation(X, self.acc_relaxation, self.acc_reg)                    
 
+                # loss after non-accelerated optimizer
+                if closure is not None:
+                    orig_loss = closure()
                 # load acceleration back into model and update history
                 vector_to_parameters(acc_param, group['params'])
-                group_hist.pop()
-                group_hist.append(acc_param)                
+                if closure is not None:
+                    # loss after accelerated optimizer
+                    acc_loss = closure()
+                    # safeguarding
+                    if acc_loss < orig_loss:
+                        group_hist.pop()
+                        group_hist.append(acc_param)
+                    else:
+                        # revert to non-accelerated params
+                        vector_to_parameters(group_hist[-1], group['params'])
                 
 
 
