@@ -8,6 +8,7 @@ def anderson_qr_factorization(X, relaxation=1.0, regularization = 0.0):
     # Return acceleration for X[:,-1]
 
     assert X.ndim==2, "X must be a matrix"
+    assert regularization >= 0.0, "regularization for least-squares must be >=0.0"
 
     # Compute residuals
     DX =  X[:,1:] -  X[:,:-1] # DX[:,i] =  X[:,i+1] -  X[:,i]
@@ -18,16 +19,17 @@ def anderson_qr_factorization(X, relaxation=1.0, regularization = 0.0):
     # gamma, _ = torch.triangular_solve( (q.t()@DX[:,-1]).unsqueeze(1), r )
     # gamma = gamma.squeeze(1)
 
-    # solve unconstrained least-squares problem
-    # gamma, _ = torch.lstsq( DX[:,-1].unsqueeze(1), DR )
-    # gamma = gamma.squeeze(1)[:DR.size(1)]
-    
-    # solve augmented least-squares for Tykhonov regularization
-    rhs = DX[:,-1].unsqueeze(1)
-    expanded_rhs       = torch.cat( (rhs, torch.zeros(DR.size(1),1)) )
-    expanded_matrix = torch.cat( (DR, torch.sqrt(torch.tensor(relaxation)) * torch.eye(DR.size(1))) )
-    gamma, _ = torch.lstsq( expanded_rhs, expanded_matrix )
-    gamma = gamma.squeeze(1)[:DR.size(1)]   
+    if regularization == 0.0:
+       # solve unconstrained least-squares problem
+       gamma, _ = torch.lstsq( DX[:,-1].unsqueeze(1), DR )
+       gamma = gamma.squeeze(1)[:DR.size(1)]
+    else:
+       # solve augmented least-squares for Tykhonov regularization
+       rhs = DX[:,-1].unsqueeze(1)
+       expanded_rhs       = torch.cat( (rhs, torch.zeros(DR.size(1),1)) )
+       expanded_matrix = torch.cat( (DR, torch.sqrt(torch.tensor(regularization)) * torch.eye(DR.size(1))) )
+       gamma, _ = torch.lstsq( expanded_rhs, expanded_matrix )
+       gamma = gamma.squeeze(1)[:DR.size(1)]   
 
     # compute acceleration
     extr = X[:,-2] + DX[:,-1] - (DX[:,:-1]+DR)@gamma
@@ -50,6 +52,7 @@ def anderson_normal_equation(X, relaxation=1.0, regularization = 0.0):
     # Return acceleration for X[:,-1]
 
     assert X.ndim==2, "X must be a matrix"
+    assert regularization >= 0.0, "regularization for least-squares must be >=0.0"
 
     # Compute residuals
     DX =  X[:,1:] -  X[:,:-1] # DX[:,i] =  X[:,i+1] -  X[:,i]
@@ -61,8 +64,11 @@ def anderson_normal_equation(X, relaxation=1.0, regularization = 0.0):
     # gamma = gamma.squeeze(1)
 
     # solve unconstrained least-squares problem
-    
-    RR = DR.t()@DR + regularization * torch.eye(DR.size(1))
+    if regularization != 0.0: 
+       RR = DR.t()@DR + regularization * torch.eye(DR.size(1))
+    else: 
+       RR = DR.t()@DR
+
     projected_residual = DR.t()@DX[:,-1].unsqueeze(1)
     
     gamma, _ = torch.solve( projected_residual, RR )
