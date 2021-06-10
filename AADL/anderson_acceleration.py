@@ -2,7 +2,7 @@
 
 import torch
 
-def anderson_qr_factorization(X, relaxation=1.0):
+def anderson_qr_factorization(X, relaxation=1.0, regularization = 0.0):
     # Anderson Acceleration
     # Take a matrix X of iterates such that X[:,i] = g(X[:,i-1])
     # Return acceleration for X[:,-1]
@@ -19,8 +19,15 @@ def anderson_qr_factorization(X, relaxation=1.0):
     # gamma = gamma.squeeze(1)
 
     # solve unconstrained least-squares problem
-    gamma, _ = torch.lstsq( DX[:,-1].unsqueeze(1), DR )
-    gamma = gamma.squeeze(1)[:DR.size(1)]
+    # gamma, _ = torch.lstsq( DX[:,-1].unsqueeze(1), DR )
+    # gamma = gamma.squeeze(1)[:DR.size(1)]
+    
+    # solve augmented least-squares for Tykhonov regularization
+    rhs = DX[:,-1].unsqueeze(1)
+    expanded_rhs       = torch.cat( (rhs, torch.zeros(DR.size(1),1)) )
+    expanded_matrix = torch.cat( (DR, torch.sqrt(torch.tensor(relaxation)) * torch.eye(DR.size(1))) )
+    gamma, _ = torch.lstsq( expanded_rhs, expanded_matrix )
+    gamma = gamma.squeeze(1)[:DR.size(1)]   
 
     # compute acceleration
     extr = X[:,-2] + DX[:,-1] - (DX[:,:-1]+DR)@gamma
@@ -37,7 +44,7 @@ def anderson_qr_factorization(X, relaxation=1.0):
     return extr
 
 
-def anderson_normal_equation(X, relaxation=1.0):
+def anderson_normal_equation(X, relaxation=1.0, regularization = 0.0):
     # Anderson Acceleration
     # Take a matrix X of iterates such that X[:,i] = g(X[:,i-1])
     # Return acceleration for X[:,-1]
@@ -55,7 +62,7 @@ def anderson_normal_equation(X, relaxation=1.0):
 
     # solve unconstrained least-squares problem
     
-    RR = DR.t()@DR
+    RR = DR.t()@DR + regularization * torch.eye(DR.size(1))
     projected_residual = DR.t()@DX[:,-1].unsqueeze(1)
     
     gamma, _ = torch.solve( projected_residual, RR )
