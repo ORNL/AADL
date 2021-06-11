@@ -74,6 +74,29 @@ class FixedPointIteration(object):
         self.training_loss_history = []
         self.validation_loss_history = []
         self.validation_accuracy = []
+        
+        # Validation
+        with torch.no_grad():
+            self.model.get_model().train(False)
+            val_loss = 0.0
+            count_val = 0
+            correct = 0
+
+            for batch_idx, (data, target) in enumerate(self.validation_dataloader):
+                count_val = count_val + 1
+                data, target = (data.to(self.model.get_device()),target.to(self.model.get_device()))
+                output = self.model.forward(data)
+                loss = self.criterion(output, target)
+                val_loss = val_loss + loss
+
+                if self.loss_name == 'nll':
+                    pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+                    correct += pred.eq(target.view_as(pred)).sum().item()
+
+
+        val_loss = val_loss / count_val
+
+        self.validation_loss_history.append(val_loss)        
 
         while epoch_counter < num_epochs and value_loss > threshold:
 
@@ -163,7 +186,7 @@ class FixedPointIteration(object):
             self.criterion = lambda x, y: (x - y).sum()
             self.criterion_specified = True
         elif criterion_string.lower() == 'nonconvex':
-            self.criterion = lambda x, y: (((y - x)**2) + 0.5*(y**2 - x**2)**2).sum()
+            self.criterion = lambda x, y: (((y - x)**2) + 0.2*(y**2 - x**2)**2).sum()
             #self.criterion = lambda x, y: (((y - x)**2)).sum()
             self.criterion_specified = True            
         else:
