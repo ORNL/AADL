@@ -1,6 +1,5 @@
 import torch
 from torch.nn.utils import parameters_to_vector, vector_to_parameters
-import SWA as SWA
 from collections import deque
 from types import MethodType
 
@@ -71,7 +70,9 @@ def averaged_accelerated_step(self, closure=None):
     self.orig_step(closure)
     
     for group, group_hist in zip(self.param_groups, self.avg_param_hist):
-        group_hist.append(parameters_to_vector(group['params']).detach())    
+        group_hist.append(parameters_to_vector(group['params']).detach())  
+        
+    """
         
     #perform moving average
     for avg_group_hist, acc_group_hist in zip(self.avg_param_hist, self.acc_param_hist):
@@ -82,6 +83,27 @@ def averaged_accelerated_step(self, closure=None):
             
             for i in range(0,3):
                 avg_group_hist.pop()
+    """
+   
+        
+    #perform moving average
+    for group, group_hist in zip(self.param_groups, self.avg_param_hist):
+        if len(self.avg_param_hist)==3:
+            X = torch.stack(list(group_hist), dim=1)
+            average = torch.mean(X, dim=1)
+            
+            # load acceleration back into model and update history
+            vector_to_parameters(average, group['params'])
+
+            for i in range(0,3):
+                self.avg_param_hist.pop()   
+                
+    # add current parameters to the history
+    self.acc_store_counter += 1
+    if self.acc_store_counter >= self.acc_store_each_nth:
+        self.acc_store_counter = 0  # reset and continue
+        for group, group_hist in zip(self.param_groups, self.acc_param_hist):
+            group_hist.append(parameters_to_vector(group['params']).detach())             
             
     # perform acceleration
     self.acc_call_counter += 1

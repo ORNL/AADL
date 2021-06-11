@@ -8,7 +8,7 @@ import AADL as accelerate
 
 class FixedPointIteration(object):
     def __init__(self, training_dataloader: torch.utils.data.dataloader.DataLoader, validation_dataloader: torch.utils.data.dataloader.DataLoader,
-        learning_rate: float, weight_decay: float = 0.0, verbose: bool = False):
+        learning_rate: float, weight_decay: float = 0.0, safeguard: bool = False, verbose: bool = False):
         """
 
         :type training_dataloader: torch.utils.data.dataloader.DataLoader
@@ -41,6 +41,8 @@ class FixedPointIteration(object):
         self.optimizer_specified = False
         self.optimizer = None
         self.loss_name = None
+
+        self.safeguard = safeguard
 
         self.verbose = verbose
 
@@ -84,7 +86,7 @@ class FixedPointIteration(object):
                 output = self.model.forward(data)
                 loss = self.criterion(output, target)
                 loss.backward()
-                if self.optimizer_str == 'lbfgs':
+                if self.optimizer_str == 'lbfgs' or self.safeguard:
                     def closure():
                         if torch.is_grad_enabled():
                             self.optimizer.zero_grad()
@@ -161,7 +163,7 @@ class FixedPointIteration(object):
             self.criterion = lambda x, y: (x - y).sum()
             self.criterion_specified = True
         elif criterion_string.lower() == 'nonconvex':
-            self.criterion = lambda x, y: (((y - x)**2) + 0.1*(y**2 - x**2)**2).sum()
+            self.criterion = lambda x, y: (((y - x)**2) + 0.5*(y**2 - x**2)**2).sum()
             #self.criterion = lambda x, y: (((y - x)**2)).sum()
             self.criterion_specified = True            
         else:
@@ -219,7 +221,7 @@ class FixedPointIteration(object):
 class DeterministicAcceleration(FixedPointIteration):
     def __init__(self,training_dataloader: torch.utils.data.dataloader.DataLoader,validation_dataloader: torch.utils.data.dataloader.DataLoader,
         acceleration_type: str = 'anderson',learning_rate: float = 1e-3,relaxation: float = 0.1,weight_decay: float = 0.0,
-        wait_iterations: int = 1, history_depth: int = 15, frequency: int = 1, reg_acc: float = 0.0, store_each_nth: int = 1, average: bool = False, verbose: bool = False):
+        wait_iterations: int = 1, history_depth: int = 15, frequency: int = 1, reg_acc: float = 0.0, store_each_nth: int = 1, average: bool = False, safeguard: bool = False, verbose: bool = False):
 
         """
 
@@ -234,11 +236,12 @@ class DeterministicAcceleration(FixedPointIteration):
         :type frequency: int
         :type reg_acc: float
         :type store_each_nth: int
+        :type safeguard: bool
         :type average: bool
         :type verbose: bool
         """
 
-        super(DeterministicAcceleration, self).__init__(training_dataloader,validation_dataloader,learning_rate,weight_decay,verbose)
+        super(DeterministicAcceleration, self).__init__(training_dataloader,validation_dataloader,learning_rate,weight_decay,safeguard,verbose)
         self.acceleration_type = acceleration_type.lower()
         self.wait_iterations = wait_iterations
         self.relaxation = relaxation
