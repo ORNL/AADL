@@ -150,7 +150,8 @@ if __name__ == '__main__':
         validation_dataloader,
     ) = dataloader(dataset_name, subsample_factor, batch_size)
 
-    color = cm.rainbow(numpy.linspace(0, 1, number_runs))
+    #color = cm.rainbow(numpy.linspace(0, 1, number_runs))
+    color = ['tab:blue', 'tab:orange', 'tab:green']
 
     for iteration in range(0, number_runs):
 
@@ -160,6 +161,7 @@ if __name__ == '__main__':
         model_classic = MLP(input_dim,output_dim,num_neurons_list,use_bias,activation,classification_problem,available_device)
 
         model_anderson = deepcopy(model_classic)
+        model_average = deepcopy(model_classic)
 
         # For classification problems, the loss function is the negative log-likelihood (nll)
         # For regression problems, the loss function is the mean squared error (mse)
@@ -191,6 +193,8 @@ if __name__ == '__main__':
             frequency,
             reg_acc,
             store_each_nth,
+            False,
+            True,
             verbose,
         )
 
@@ -203,21 +207,51 @@ if __name__ == '__main__':
             validation_anderson_loss_history,
             validation_anderson_accuracy_history,
         ) = optimizer_anderson.train(epochs, threshold, batch_size)
+        
+        optimizer_average = DeterministicAcceleration(
+            training_dataloader,
+            validation_dataloader,
+            acceleration,
+            learning_rate,
+            relaxation,
+            weight_decay,
+            wait_iterations,
+            history_depth,
+            frequency,
+            reg_acc,
+            store_each_nth,
+            True,
+            True,
+            verbose,
+        )
+
+        optimizer_average.import_model(model_average)
+        optimizer_average.set_loss_function(loss_function_name)
+        optimizer_average.set_optimizer(optimizer_name)
+
+        (
+            training_average_loss_history,
+            validation_average_loss_history,
+            validation_average_accuracy_history,
+        ) = optimizer_average.train(epochs, threshold, batch_size)        
 
         if config['display']:
-            epochs1 = range(1, len(training_classic_loss_history) + 1)
-            epochs2 = range(1, len(training_anderson_loss_history) + 1)
+            epochs1 = range(1, len(validation_classic_loss_history) + 1)
+            epochs2 = range(1, len(validation_anderson_loss_history) + 1)
+            epochs3 = range(1, len(validation_average_loss_history) + 1)
             if len(validation_classic_accuracy_history) > 0:
-                plt.plot(epochs1,validation_classic_accuracy_history,color=color[iteration],linestyle='-')
-                plt.plot(epochs2,validation_anderson_accuracy_history,color=color[iteration],linestyle='--')
+                plt.plot(epochs1,validation_classic_accuracy_history,color=color[iteration],linestyle='-', linewidth=4)
+                plt.plot(epochs2,validation_anderson_accuracy_history,color=color[iteration],linestyle='--', linewidth=4)
+                #plt.plot(epochs3,validation_average_accuracy_history,color=color[iteration],linestyle='dotted', linewidth=4)
             else:
-                plt.plot(epochs1,validation_classic_loss_history,color=color[iteration],linestyle='-')
-                plt.plot(epochs2,validation_anderson_loss_history,color=color[iteration],linestyle='--')                
+                plt.plot(epochs1,validation_classic_loss_history,color=color[iteration],linestyle='-', linewidth=4)
+                plt.plot(epochs2,validation_anderson_loss_history,color=color[iteration],linestyle='--', linewidth=4)    
+                #plt.plot(epochs3,validation_average_loss_history,color=color[iteration],linestyle='dotted', linewidth=4)    
             plt.yscale('log')
-            plt.title('Validation loss function')
+            plt.title('UCI - Graduate admission dataset')
             plt.xlabel('Epochs')
-            plt.ylabel('Loss')
-            #plt.legend()
+            plt.ylabel('Validation Measn Squared Error')
+            plt.legend(["NSGD - Seed1", "NSGD+AA - Seed1", "NSGD - Seed2", "NSGD+AA - Seed2", "NSGD - Seed3", "NSGD+AA - Seed3"])
             plt.draw()
             plt.savefig('validation_loss_plot')
 
