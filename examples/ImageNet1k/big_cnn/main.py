@@ -20,6 +20,8 @@ import os
 import argparse
 from copy import deepcopy
 
+import datetime
+
 import AADL as accelerate
 
 import sys
@@ -174,6 +176,7 @@ class Optimization:
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet1k Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
+parser.add_argument('--checkpoint', default=False, type=bool, help='Checkpoint for restart')
 
 args = parser.parse_args()
 
@@ -237,6 +240,13 @@ torch.manual_seed(0)
 net_classic = deepcopy(net)
 net_anderson = deepcopy(net)
 
+if checkpoint:
+    checkpoint_classic = torch.load(net_classic.pt)
+    net_classic.load_state_dict(checkpoint_classic['model_state_dict'])
+    checkpoint_anderson = torch.load(net_anderson.pt)
+    net_anderson.load_state_dict(checkpoint_anderson['model_state_dict'])    
+
+
 # Map neural networks to aq device if any GPU is available
 net_classic = net_classic.to('cuda:'+world_rank)
 net_classic = nn.parallel.DistributedDataParallel(net_classic, device_ids=['cuda:'+world_rank])
@@ -254,7 +264,8 @@ history_depth = 5
 store_each_nth = 391
 frequency = store_each_nth
 reg_acc = 1e-8
-average = True
+average = False
+safeguard = True
 
 optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr*int(math.sqrt(world_size)), momentum=0.9, weight_decay=5e-4)
 #scheduler_anderson = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_anderson, T_max=200)
@@ -271,6 +282,16 @@ epochs2 = range(0, len(validation_loss_anderson))
 
 # Only MPI process with rank 0 generates the plot
 if world_rank == 0:
+    
+    torch.save({
+            'epoch': len(validation_loss_classic),
+            'model_state_dict': net_classic.state_dict(),
+            }, "net_classic.pt")
+    
+    torch.save({
+            'epoch': len(validation_loss_anderson),
+            'model_state_dict': net_anderson.state_dict(),
+            }, "net_anderson.pt")    
 
     plt.figure()
     plt.plot(epochs1,validation_loss_classic,linestyle='-', label="SGD")
