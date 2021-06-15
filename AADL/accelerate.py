@@ -55,16 +55,14 @@ def averaged_step(self, closure=None):
         
     #perform moving average
     for group, group_hist in zip(self.param_groups, self.avg_param_hist):
-        if len(self.avg_param_hist)==3:
-            X = torch.stack(list(group_hist), dim=1)
-            average = torch.mean(X, dim=1)
+        X = torch.stack(list(group_hist), dim=1)
+        average = torch.mean(X, dim=1)
+        std = torch.stack(list(group_hist), dim=1)
             
+        if torch.max(std)/torch.max(average)>10.0:
             # load acceleration back into model and update history
             vector_to_parameters(average, group['params'])
-
-            for i in range(0,3):
-                self.avg_param_hist.pop()
-            
+     
 
 def averaged_accelerated_step(self, closure=None):
     self.orig_step(closure)
@@ -74,15 +72,15 @@ def averaged_accelerated_step(self, closure=None):
          
     #perform moving average
     for group, group_hist in zip(self.param_groups, self.avg_param_hist):
-        if len(self.avg_param_hist)==3:
-            X = torch.stack(list(group_hist), dim=1)
-            average = torch.mean(X, dim=1)
+        X = torch.stack(list(group_hist), dim=1)
+        average = torch.mean(X, dim=1)
+        std = torch.stack(list(group_hist), dim=1)
             
+        #print(torch.norm(std), torch.norm(average), torch.norm(std)/torch.norm(average))
+            
+        if torch.max(std)/torch.max(average)>10.0:
             # load acceleration back into model and update history
             vector_to_parameters(average, group['params'])
-
-            for i in range(0,3):
-                self.avg_param_hist.pop()   
                 
     # add current parameters to the history
     self.acc_store_counter += 1

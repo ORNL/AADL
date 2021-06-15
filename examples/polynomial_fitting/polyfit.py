@@ -45,7 +45,7 @@ fc = torch.nn.Linear(W_target.size(0), 1)
 fc_anderson = deepcopy(fc)
 fc_average = deepcopy(fc)
 
-lr = 1e-3
+lr = 1e-4
 max_iters = 50000
 optim = torch.optim.SGD(fc.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
 
@@ -65,7 +65,7 @@ for idx in range(max_iters):
     optim.step()
 
     # Stop criterion
-    if loss < 1e-4:
+    if loss < 1e-6:
         break
 
 print('Loss: {:.6f} after {} batches'.format(loss, idx))
