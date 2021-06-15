@@ -59,7 +59,7 @@ def averaged_step(self, closure=None):
         average = torch.mean(X, dim=1)
         std = torch.stack(list(group_hist), dim=1)
             
-        if torch.max(std)/torch.max(average)>10.0:
+        if torch.max(std)/torch.max(average)>1.0:
             # load acceleration back into model and update history
             vector_to_parameters(average, group['params'])
      
@@ -78,7 +78,7 @@ def averaged_accelerated_step(self, closure=None):
             
         #print(torch.norm(std), torch.norm(average), torch.norm(std)/torch.norm(average))
             
-        if torch.max(std)/torch.max(average)>10.0:
+        if torch.max(std)/torch.max(average)>1.0:
             # load acceleration back into model and update history
             vector_to_parameters(average, group['params'])
                 
