@@ -42,7 +42,7 @@ def poly_desc(W, b):
     return result
 
 
-def get_batch(batch_size=300):
+def get_batch(batch_size=3000):
     """Builds a batch i.e. (x, f(x)) pair."""
     random = torch.randn(batch_size)
     x = make_features(random)
@@ -57,7 +57,7 @@ fc_average = deepcopy(fc)
 
 lr = 1e-4
 max_iters = 500
-optim = torch.optim.SGD(fc.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
+optim = torch.optim.SGD(fc.parameters(), lr=lr, momentum=0.9, weight_decay=0.0)
 
 for idx in range(max_iters):
     # Get data
@@ -89,14 +89,15 @@ import AADL as accelerate
 
 # Parameters for Anderson acceleration
 lr = 1e-2
-relaxation = 0.1
+relaxation = 0.5
 wait_iterations = 1
-history_depth = 5
+history_depth = 3
 store_each_nth = 3
 frequency = store_each_nth
 reg_acc = 0
 average = False
-optimizer_anderson= torch.optim.SGD(fc_anderson.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
+safeguard = True
+optimizer_anderson= torch.optim.SGD(fc_anderson.parameters(), lr=lr, momentum=0.9, weight_decay=0.0)
 accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc, average)
 
 for idx in range(max_iters):
@@ -134,7 +135,7 @@ print('==> Actual function:\t' + poly_desc(W_target.view(-1), b_target))
 
 average = True
 
-optimizer_average= torch.optim.SGD(fc_average.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
+optimizer_average= torch.optim.SGD(fc_average.parameters(), lr=lr, momentum=0.9, weight_decay=0.0)
 accelerate.accelerate(optimizer_average, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc, average)
 
 for idx in range(max_iters):
@@ -182,7 +183,7 @@ plt.yscale('log')
 plt.title('Polynomial fitting')
 plt.xlabel('Epochs')
 plt.ylabel('Validation Measn Squared Error')
-plt.legend(["NSGD", "NSGD + AA", "NSDG + Average + AA"])
+plt.legend(["NSGD", "NSGD + AA", "NSDG + Average + AA"], loc='upper right')
 plt.tight_layout()
 plt.draw()
 plt.savefig('validation_loss_plot')
