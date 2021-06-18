@@ -252,7 +252,7 @@ if __name__ == '__main__':
             plt.xlabel('Epochs')
             plt.ylabel('Validation Measn Squared Error')
             plt.legend(["NSGD - Seed1", "NSGD+AA - Seed1", "NSGD - Seed2", "NSGD+AA - Seed2", "NSGD - Seed3", "NSGD+AA - Seed3"])
+            plt.tight_layout()
             plt.draw()
             plt.savefig('validation_loss_plot')
 
-            plt.tight_layout()
