@@ -122,6 +122,10 @@ class TestMultiscaleParaboloid(unittest.TestCase):
         weight_sum, history = test_multiscale_paraboloid_anderson(dim=100, condition_number=1, optimizer='adam', lr=1.e-3, epochs=10000)
         print("Well conditioned problem - 100d Adam finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
+        
+
+    ###########
+
 
 
     def test_100d_well_conditioned_paraboloid_sgd_anderson(self):
@@ -140,7 +144,6 @@ class TestMultiscaleParaboloid(unittest.TestCase):
         print("Well conditioned problem - 100d Adam + Anderson finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
         
-
 
     ###########
 
