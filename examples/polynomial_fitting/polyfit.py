@@ -5,12 +5,22 @@ from copy import deepcopy
 import torch
 import torch.nn.functional as F
 
+import matplotlib.pyplot as plt
+
 POLY_DEGREE = 4
 W_target = torch.randn(POLY_DEGREE, 1) * 5
 b_target = torch.randn(1) * 5
 
+validation_classic_loss_history = []
+validation_anderson_loss_history = []
+validation_average_loss_history = []
+
+
 torch.manual_seed(0)
 
+colors = ["tab:blue", "tab:orange", "tab:green"]
+
+plt.rcParams.update({'font.size': 16})
 
 def make_features(x):
     """Builds features i.e. a matrix with columns [x, x^2, x^3, x^4]."""
@@ -46,7 +56,7 @@ fc_anderson = deepcopy(fc)
 fc_average = deepcopy(fc)
 
 lr = 1e-4
-max_iters = 50000
+max_iters = 500
 optim = torch.optim.SGD(fc.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
 
 for idx in range(max_iters):
@@ -59,13 +69,14 @@ for idx in range(max_iters):
     # Forward pass
     output = F.mse_loss(fc(batch_x), batch_y)
     loss = output.item()
+    validation_classic_loss_history.append(loss)
 
     # Backward pass
     output.backward()
     optim.step()
 
     # Stop criterion
-    if loss < 1e-6:
+    if loss < 1e-4:
         break
 
 print('Loss: {:.6f} after {} batches'.format(loss, idx))
@@ -78,10 +89,10 @@ import AADL as accelerate
 
 # Parameters for Anderson acceleration
 lr = 1e-2
-relaxation = 0.2
+relaxation = 0.1
 wait_iterations = 1
-history_depth = 10
-store_each_nth = 5
+history_depth = 5
+store_each_nth = 3
 frequency = store_each_nth
 reg_acc = 0
 average = False
@@ -98,6 +109,7 @@ for idx in range(max_iters):
     # Forward pass
     output = F.mse_loss(fc_anderson(batch_x), batch_y)
     loss = output.item()
+    validation_anderson_loss_history.append(loss)
     
     def closure():
         if torch.is_grad_enabled():
@@ -135,6 +147,7 @@ for idx in range(max_iters):
     # Forward pass
     output = F.mse_loss(fc_average(batch_x), batch_y)
     loss = output.item()
+    validation_average_loss_history.append(loss)
     
     def closure():
         if torch.is_grad_enabled():
@@ -156,3 +169,20 @@ for idx in range(max_iters):
 print('Loss: {:.6f} after {} batches'.format(loss, idx))
 print('==> Learned function:\t' + poly_desc(fc_average.weight.view(-1), fc_average.bias))
 print('==> Actual function:\t' + poly_desc(W_target.view(-1), b_target))
+
+epochs1 = range(1, len(validation_classic_loss_history) + 1)
+epochs2 = range(1, len(validation_anderson_loss_history) + 1)
+epochs3 = range(1, len(validation_average_loss_history) + 1)
+
+plt.plot(epochs1,validation_classic_loss_history,color=colors[0],linestyle='-', linewidth=4)
+plt.plot(epochs2,validation_anderson_loss_history,color=colors[1],linestyle='-', linewidth=4)
+plt.plot(epochs3,validation_average_loss_history,color=colors[2],linestyle='-', linewidth=4)
+ 
+plt.yscale('log')
+plt.title('Polynomial fitting')
+plt.xlabel('Epochs')
+plt.ylabel('Validation Measn Squared Error')
+plt.legend(["NSGD", "NSGD + AA", "NSDG + Average + AA"])
+plt.tight_layout()
+plt.draw()
+plt.savefig('validation_loss_plot')
