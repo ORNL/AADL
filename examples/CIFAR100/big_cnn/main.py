@@ -50,12 +50,13 @@ from vgg import *
 
 class Optimization:
     
-    def __init__(self, network: torch.nn.Module, trainloader: torch.utils.data.DataLoader, testloader: torch.utils.data.DataLoader, optimizer: torch.optim, num_epochs: int):
+    def __init__(self, network: torch.nn.Module, trainloader: torch.utils.data.DataLoader, testloader: torch.utils.data.DataLoader, optimizer: torch.optim, safeguard: bool, num_epochs: int):
         
         self.trainloader = trainloader
         self.testloader = testloader
         self.network = network
         self.optimizer = optimizer
+        self.safeguard = safeguard        
         self.num_epochs = num_epochs
         self.training_loss_history = []
         self.training_accuracy_history = []
@@ -98,7 +99,18 @@ class Optimization:
             outputs = self.network(inputs)
             loss = criterion(outputs, targets)
             loss.backward()
-            self.optimizer.step()
+            if self.optimizer_str == 'lbfgs' or self.safeguard:
+                def closure():
+                    if torch.is_grad_enabled():
+                        self.optimizer.zero_grad()
+                    output = self.network.forward(inputs)
+                    loss = self.criterion(output, targets)
+                    if loss.requires_grad:
+                        loss.backward()
+                    return loss
+                self.optimizer.step(closure)
+            else:
+                self.optimizer.step()
     
             train_loss += loss.item()
             _, predicted = outputs.max(1)
@@ -234,6 +246,7 @@ history_depth = 5
 store_each_nth = 391
 frequency = store_each_nth
 reg_acc = 1e-8
+safeguard = True
 average = True
 
 optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
@@ -241,7 +254,7 @@ optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr, momentum=0.
 accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc, average)
 
 optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, 200)
-optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, 200)
+optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, safeguard, 200)
 
 _, _, validation_loss_classic, validation_accuracy_classic = optimization_classic.train()
 _, _, validation_loss_anderson, validation_accuracy_anderson = optimization_anderson.train()
