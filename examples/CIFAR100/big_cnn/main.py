@@ -253,7 +253,7 @@ optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr, momentum=0.
 #scheduler_anderson = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_anderson, T_max=200)
 accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc, average)
 
-optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, 200)
+optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, False, 200)
 optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, safeguard, 200)
 
 _, _, validation_loss_classic, validation_accuracy_classic = optimization_classic.train()
