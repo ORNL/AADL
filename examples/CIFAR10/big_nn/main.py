@@ -99,7 +99,7 @@ class Optimization:
             outputs = self.network(inputs)
             loss = criterion(outputs, targets)
             loss.backward()
-            if self.optimizer_str == 'lbfgs' or self.safeguard:
+            if self.safeguard:
                 def closure():
                     if torch.is_grad_enabled():
                         self.optimizer.zero_grad()
