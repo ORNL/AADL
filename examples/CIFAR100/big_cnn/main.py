@@ -104,7 +104,7 @@ class Optimization:
                     if torch.is_grad_enabled():
                         self.optimizer.zero_grad()
                     output = self.network.forward(inputs)
-                    loss = self.criterion(output, targets)
+                    loss = criterion(output, targets)
                     if loss.requires_grad:
                         loss.backward()
                     return loss
