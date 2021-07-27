@@ -20,6 +20,8 @@ import os
 import argparse
 from copy import deepcopy
 
+import datetime
+
 import AADL as accelerate
 
 import sys
@@ -79,6 +81,7 @@ class Optimization:
         self.training_accuracy_history = []
         self.validation_loss_history = []
         self.validation_accuracy_history = []
+        self.lr = self.optimizer.param_groups[0]['lr']
         
     def initial_performance_evaluation(self):
         
@@ -109,6 +112,16 @@ class Optimization:
         train_loss = 0
         correct = 0
         total = 0
+        
+        # warm-up value for learning rate 
+        if epoch <= 5:
+            for g in self.optimizer.param_groups:
+                g['lr'] = 1e-4
+        else:
+            for g in self.optimizer.param_groups:
+                g['lr'] = self.lr            
+        
+        
         for batch_idx, (inputs, targets) in enumerate(trainloader):
             inputs, targets = inputs.to(self.network.device), targets.to(self.network.device)
             self.optimizer.zero_grad()
@@ -163,6 +176,7 @@ class Optimization:
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet1k Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
+parser.add_argument('--checkpoint', default=False, type=bool, help='Checkpoint for restart')
 
 args = parser.parse_args()
 
@@ -218,13 +232,20 @@ print('==> Building model..')
 # net = ShuffleNetV2( num_classes = 1000 )
 # net = EfficientNetB0( num_classes = 1000 )
 # net = RegNetX_200MF( num_classes = 1000 )
-net = SimpleDLA( num_classes = 1000 )
+# net = SimpleDLA( num_classes = 1000 )
 
 torch.manual_seed(0)
 
 # Perform deepcopies of the original model 
 net_classic = deepcopy(net)
 net_anderson = deepcopy(net)
+
+if checkpoint:
+    checkpoint_classic = torch.load(net_classic.pt)
+    net_classic.load_state_dict(checkpoint_classic['model_state_dict'])
+    checkpoint_anderson = torch.load(net_anderson.pt)
+    net_anderson.load_state_dict(checkpoint_anderson['model_state_dict'])    
+
 
 # Map neural networks to aq device if any GPU is available
 net_classic = net_classic.to('cuda:'+world_rank)
@@ -233,8 +254,7 @@ net_anderson = net_anderson.to('cuda:'+world_rank)
 net_anderson = nn.parallel.DistributedDataParallel(net_anderson, device_ids=['cuda:'+world_rank])
 
 criterion = nn.CrossEntropyLoss().cuda('cuda:'+world_rank)
-optimizer_classic = optim.SGD(net_classic.parameters(), lr=args.lr,
-                      momentum=0.9, weight_decay=5e-4)
+optimizer_classic = optim.SGD(net_classic.parameters(), lr=args.lr*int(math.sqrt(world_size)), momentum=0.9, weight_decay=5e-4)
 #scheduler_classic = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_classic, T_max=200)
 
 # Parameters for Anderson acceleration
@@ -244,11 +264,12 @@ history_depth = 5
 store_each_nth = 391
 frequency = store_each_nth
 reg_acc = 1e-8
-average = True
+average = False
+safeguard = True
 
-optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr*int(math.sqrt(world_size)), momentum=0.9, weight_decay=5e-4)
 #scheduler_anderson = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_anderson, T_max=200)
-accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc, average)
+accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc, average, safeguard)
 
 optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, 200)
 optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, 200)
@@ -261,6 +282,16 @@ epochs2 = range(0, len(validation_loss_anderson))
 
 # Only MPI process with rank 0 generates the plot
 if world_rank == 0:
+    
+    torch.save({
+            'epoch': len(validation_loss_classic),
+            'model_state_dict': net_classic.state_dict(),
+            }, "net_classic.pt")
+    
+    torch.save({
+            'epoch': len(validation_loss_anderson),
+            'model_state_dict': net_anderson.state_dict(),
+            }, "net_anderson.pt")    
 
     plt.figure()
     plt.plot(epochs1,validation_loss_classic,linestyle='-', label="SGD")
