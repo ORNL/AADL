@@ -1,6 +1,7 @@
 # Anderson Accelerated Deep Learning (AADL)
 
-AADL is a Python package that implements the Anderson acceleration to speed-up the training of deep learning (DL) models implemented using the PyTorch library.
+AADL is a Python package that implements the Anderson acceleration to speed-up the training of deep learning (DL) models using the PyTorch library.\
+AA is an extrapolation technique that can accelerate fixed-point iterations such those arising from the iterative trainingof DL models. However, large volume of data are typically processed in sequential random batches which introduces stochastic oscillations in the fixed-point iteration that hinders AA acceleration. AADL implements a moving average that reduces the oscillations and results in a smoother sequence of gradient descent updates which enables the use of AA. AADL uses a criterion to automatically decide if the moving average is needed by monitoring if the relative standard deviation be-tween consecutive stochastic gradient updates exceeds a tolerance defined by the user.
 
 ## Requirements
 Python 3.5 or greater\
@@ -8,7 +9,11 @@ PyTorch (any version works)
 
 ## Installation
 
+AADL comes with a ```python setuptools``` install script:
+
+```python
 python3 setup.py install
+```
 
 ## Usage
 
@@ -45,3 +50,7 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 
 ## License
 [BSD-3-Clause](https://spdx.org/licenses/BSD-3-Clause.html)
+
+### Citations
+"AADL: Anderson Accelerated Deep Learning", Copyright ID#: 81927550 
+https://doi.org/10.11578/dc.20210723.1
