@@ -9,7 +9,7 @@ PyTorch (any version works)
 
 ## Installation
 
-AADL comes with a ```python setuptools``` install script:
+AADL comes with a ```setuptools``` install script:
 
 ```python
 python3 setup.py install
