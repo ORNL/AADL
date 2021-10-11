@@ -14,22 +14,15 @@ def anderson_qr_factorization(X, relaxation=1.0, regularization = 0.0):
     DX =  X[:,1:] -  X[:,:-1] # DX[:,i] =  X[:,i+1] -  X[:,i]
     DR = DX[:,1:] - DX[:,:-1] # DR[:,i] = DX[:,i+1] - DX[:,i] = X[:,i+2] - 2*X[:,i+1] + X[:,i]
 
-    # # use QR factorization
-    # q, r = torch.qr(DR)
-    # gamma, _ = torch.triangular_solve( (q.t()@DX[:,-1]).unsqueeze(1), r )
-    # gamma = gamma.squeeze(1)
-
     if regularization == 0.0:
        # solve unconstrained least-squares problem
-       gamma, _ = torch.lstsq( DX[:,-1].unsqueeze(1), DR )
-       gamma = gamma.squeeze(1)[:DR.size(1)]
+       gamma = torch.linalg.lstsq(DR, R[:, -1]).solution
     else:
        # solve augmented least-squares for Tykhonov regularization
        rhs = DX[:,-1].unsqueeze(1)
        expanded_rhs       = torch.cat( (rhs, torch.zeros(DR.size(1),1)) )
        expanded_matrix = torch.cat( (DR, torch.sqrt(torch.tensor(regularization)) * torch.eye(DR.size(1))) )
-       gamma, _ = torch.lstsq( expanded_rhs, expanded_matrix )
-       gamma = gamma.squeeze(1)[:DR.size(1)]   
+       gamma = torch.linalg.lstsq(expanded_matrix, expanded_rhs).solution
 
     # compute acceleration
     extr = X[:,-2] + DX[:,-1] - (DX[:,:-1]+DR)@gamma
@@ -71,8 +64,7 @@ def anderson_normal_equation(X, relaxation=1.0, regularization = 0.0):
 
     projected_residual = DR.t()@DX[:,-1].unsqueeze(1)
     
-    gamma, _ = torch.solve( projected_residual, RR )
-    gamma = gamma.squeeze(1)[:DR.size(1)]
+    gamma = torch.linalg.solve( RR, projected_residual )
 
     # compute acceleration
     extr = X[:,-2] + DX[:,-1] - (DX[:,:-1]+DR)@gamma
