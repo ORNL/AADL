@@ -125,7 +125,7 @@ def averaged_accelerated_step(self, closure=None):
                         vector_to_parameters(group_hist[-1], group['params'])
 
 
-def accelerate(optimizer, acceleration_type: str = "identity", relaxation: float = 0.1, wait_iterations: int = 1, history_depth: int = 15, store_each_nth: int = 1, frequency: int = 1, reg_acc: float = 0.0, average : bool = False, history_device: str = "cpu", compute_device: str = "cuda"):
+def accelerate(optimizer, acceleration_type: str = "identity", relaxation: float = 0.1, wait_iterations: int = 1, history_depth: int = 15, store_each_nth: int = 1, frequency: int = 1, reg_acc: float = 0.0, average : bool = False, history_device: str = "cpu", compute_device: str = "cpu"):
     # acceleration options
     optimizer.acc_type            = acceleration_type.lower()
     optimizer.acc_wait_iterations = wait_iterations
