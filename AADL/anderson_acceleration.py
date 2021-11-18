@@ -65,6 +65,7 @@ def anderson_normal_equation(X, relaxation=1.0, regularization = 0.0):
     projected_residual = DR.t()@DX[:,-1].unsqueeze(1)
     
     gamma = torch.linalg.solve( RR, projected_residual )
+    gamma = gamma.view(-1)
 
     # compute acceleration
     extr = X[:,-2] + DX[:,-1] - (DX[:,:-1]+DR)@gamma
