@@ -21,11 +21,14 @@ import argparse
 from copy import deepcopy
 
 import AADL as accelerate
+from lbfgsnew import LBFGSNew
 
 import sys
 sys.path.append("../../../utils")
 from gpu_detection import get_gpu
 #from monitor_progress_utils import progress_bar
+
+import timeit
 
 def setup_ddp():
 
@@ -105,11 +108,18 @@ class Optimization:
     # Training
     def train_epoch(self, epoch):
         
-        print('\nEpoch: %d' % epoch)
         self.network.train()
         train_loss = 0
         correct = 0
         total = 0
+
+        """
+        # warm-up value for learning rate 
+        if epoch%40==0:
+            for g in self.optimizer.param_groups:
+                g['lr'] *= 0.1 
+        """
+
         for batch_idx, (inputs, targets) in enumerate(trainloader):
             inputs, targets = inputs.to(device), targets.to(device)
             self.optimizer.zero_grad()
@@ -174,7 +184,8 @@ class Optimization:
             
         return self.training_loss_history, self.training_accuracy_history, self.validation_loss_history, self.validation_accuracy_history
 
-parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
+parser = argparse.ArgumentParser(description='PyTorch CIFAR100 Training')
+parser.add_argument('--epochs', default=50, type=int, help='number of epochs')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true',
                     help='resume from checkpoint')
@@ -242,14 +253,20 @@ torch.manual_seed(0)
 
 # Perform deepcopies of the original model 
 net_classic = deepcopy(net)
+net_lbfgs = deepcopy(net)
 net_anderson = deepcopy(net)
+net_anderson_average = deepcopy(net)
 
 # Map neural networks to aq device if any GPU is available
 device='cuda:'+world_rank
 net_classic = net_classic.to(device)
 net_classic = nn.parallel.DistributedDataParallel(net_classic, device_ids=[device])
+net_lbfgs = net_lbfgs.to(device)
+net_lbfgs = nn.parallel.DistributedDataParallel(net_lbfgs, device_ids=[device])
 net_anderson = net_anderson.to(device)
 net_anderson = nn.parallel.DistributedDataParallel(net_anderson, device_ids=[device])
+net_anderson_average = net_anderson_average.to(device)
+net_anderson_average = nn.parallel.DistributedDataParallel(net_anderson_average, device_ids=[device])
 
 if args.resume:
     # Load checkpoint.
@@ -272,20 +289,63 @@ store_each_nth = 20
 frequency = store_each_nth
 reg_acc = 0.0
 safeguard = True
-average = True
+average = False
+
+optimizer_lbfgs = LBFGSNew(net_lbfgs.parameters(), history_size=history_depth, max_iter=2, line_search_fn=True, batch_mode=True)
 
 optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 #scheduler_anderson = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_anderson, T_max=200)
 accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc, average)
 
-optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, False, 50)
-optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, safeguard, 50)
+average = True
+optimizer_anderson_average = optim.SGD(net_anderson_average.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+#scheduler_anderson = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_anderson, T_max=200)
+accelerate.accelerate(optimizer_anderson_average, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc, average)
 
+optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, False, num_epochs=args.epochs)
+
+optimization_lbfgs = Optimization(net_lbfgs, trainloader, testloader, optimizer_lbfgs, safeguard, num_epochs=args.epochs)
+
+optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, safeguard, num_epochs=args.epochs)
+
+optimization_anderson_average = Optimization(net_anderson_average, trainloader, testloader, optimizer_anderson_average, safeguard, num_epochs=args.epochs)
+
+dist.barrier()
+start_classic = timeit.default_timer()
 _, _, validation_loss_classic, validation_accuracy_classic = optimization_classic.train()
-_, _, validation_loss_anderson, validation_accuracy_anderson = optimization_anderson.train()
+dist.barrier()
+end_classic = timeit.default_timer()
+if int(world_rank) == 0:
+    print("Wall-clock time for Nesterov optimizer: ", end_classic - start_classic)
 
-epochs1 = range(0, len(validation_loss_classic))
-epochs2 = range(0, len(validation_loss_anderson))
+dist.barrier()
+start_lbfgs = timeit.default_timer()
+_, _, validation_loss_lbfgs, validation_accuracy_lbfgs = optimization_lbfgs.train()
+dist.barrier()
+end_lbfgs = timeit.default_timer()
+if int(world_rank) == 0:
+    print("Wall-clock time for L-BFGS optimizer: ", end_lbfgs - start_lbfgs)
+
+dist.barrier()
+start_anderson = timeit.default_timer()
+_, _, validation_loss_anderson, validation_accuracy_anderson = optimization_anderson.train()
+dist.barrier()
+end_anderson = timeit.default_timer()
+if int(world_rank) == 0:
+    print("Wall-clock time for Nesterov + AADL optimizer: ", end_anderson - start_anderson)
+
+dist.barrier()
+start_anderson_average = timeit.default_timer()
+_, _, validation_loss_anderson_average, validation_accuracy_anderson_average = optimization_anderson_average.train()
+dist.barrier()
+end_anderson_average = timeit.default_timer()
+if int(world_rank) == 0:
+    print("Wall-clock time for Nesterov + AADL + Average optimizer: ", end_anderson_average - start_anderson_average)
+
+epochs_classic = range(0, len(validation_loss_classic))
+epochs_lbfgs = range(0, len(validation_loss_lbfgs))
+epochs_anderson = range(0, len(validation_loss_anderson))
+epochs_anderson_average = range(0, len(validation_loss_anderson_average))
 
 dist.barrier()
 
@@ -293,25 +353,31 @@ dist.barrier()
 if int(world_rank) == 0:
 
     plt.figure()
-    plt.plot(epochs1,validation_loss_classic,linestyle='-', label="SGD")
-    plt.plot(epochs2,validation_loss_anderson,linestyle='-', label="SGD + Anderson")         
+    plt.plot(epochs_classic,validation_loss_classic,linestyle='-', color='b', label="Nesterov")
+    plt.plot(epochs_lbfgs,validation_loss_lbfgs,linestyle='-', color='tab:orange', label="L-BFGS")         
+    plt.plot(epochs_anderson,validation_loss_anderson,linestyle='-', color='g', label="Nesterov + AADL")         
+    plt.plot(epochs_anderson_average,validation_loss_anderson_average,linestyle='-', color='r', label="Nesterov + AADL + Average")         
     plt.yscale('log')
-    plt.title('Validation loss function')
+    plt.title('ResNet50 on 100 GPUs with batch-size = 6000')
     plt.xlabel('Epochs')
-    plt.ylabel('Loss')
-    #plt.legend()
+    plt.ylabel('Validation Loss')
+    plt.legend(loc='upper right')
     plt.draw()
     plt.savefig('validation_loss_plot')
     plt.tight_layout()
 
     plt.figure()
-    plt.plot(epochs1,validation_accuracy_classic,linestyle='-', label="SGD")
-    plt.plot(epochs2,validation_accuracy_anderson,linestyle='-', label="SGD + Anderson")
+    plt.plot(epochs_classic,validation_accuracy_classic,linestyle='-', color='b', label="Nesterov")
+    plt.plot(epochs_lbfgs,validation_accuracy_lbfgs,linestyle='-', color='tab:orange', label="L-BFGS")         
+    plt.plot(epochs_anderson,validation_accuracy_anderson,linestyle='-', color='g', label="Nesterov + AADL")         
+    plt.plot(epochs_anderson_average,validation_accuracy_anderson_average,linestyle='-', color='r', label="Nesterov + AADL + Average")         
     plt.yscale('log')
-    plt.title('Validation accuracy')
+    plt.title('ResNet50 on 100 GPUs with batch-size = 6000')
+    plt.ylim((0,70))
+    plt.yticks([0, 10, 20, 30, 40, 50, 60, 70])
     plt.xlabel('Epochs')
-    plt.ylabel('Accuracy (%)')
-    #plt.legend()
+    plt.ylabel('Validation Accuracy (%)')
+    plt.legend(loc='lower right')
     plt.draw()
     plt.savefig('validation_accuracy_plot')
     plt.tight_layout()
