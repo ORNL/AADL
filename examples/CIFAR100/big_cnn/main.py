@@ -24,7 +24,6 @@ import AADL as accelerate
 
 import sys
 sys.path.append("../../../utils")
-from gpu_detection import get_gpu
 #from monitor_progress_utils import progress_bar
 
 import timeit
