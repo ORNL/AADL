@@ -22,10 +22,6 @@ from copy import deepcopy
 
 import AADL as accelerate
 
-import sys
-sys.path.append("../../../utils")
-#from monitor_progress_utils import progress_bar
-
 import timeit
 
 def setup_ddp():
