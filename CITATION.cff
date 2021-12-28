@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Lupo Pasini"
+  given-names: "Massimiliano"
+  orcid: "https://orcid.org/0000-0002-4980-6924"
+- family-names: "Reshniak"
+  given-names: "Viktor"
+  orcid: "https://orcid.org/0000-0003-1545-4462"
+- family-names: "Stoyanov"
+  given-names: "Miroslav"
+  orcid: "https://orcid.org/0000-0002-8199-5577"
+title: "AADL: Anderson Accelerated Deep Learning"
+version: 1.0.0
+doi: 10.11578/dc.20210723.1
+date-released: 2021-09-06
+url: "https://github.com/ORNL/AADL.git"
+license: BSD-3-Clause
