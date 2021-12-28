@@ -15,3 +15,4 @@ version: 1.0.0
 doi: 10.11578/dc.20210723.1
 date-released: 2021-09-06
 url: "https://github.com/ORNL/AADL.git"
+license: BSD-3-Clause
