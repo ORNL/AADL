@@ -80,7 +80,7 @@ def merge_args(cmdline_args, config_args):
 
 
 def get_options():
-    args = docopt(__doc__, version='Accelerated Training 0.0')
+    args = docopt(__doc__, version='AADL 1.0')
 
     # strip -- from names
     args = {key[2:]: value for key, value in args.items()}
