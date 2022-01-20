@@ -19,8 +19,8 @@ def anderson_qr_factorization(X, relaxation=1.0, regularization = 0.0):
        gamma = torch.linalg.lstsq(DR, DX[:, -1]).solution
     else:
        # solve augmented least-squares for Tykhonov regularization
-       rhs = DX[:,-1].unsqueeze(1)
-       expanded_rhs       = torch.cat( (rhs, torch.zeros(DR.size(1),1)) )
+       rhs = DX[:,-1]
+       expanded_rhs    = torch.cat( (rhs, torch.zeros(DR.size(1))) )
        expanded_matrix = torch.cat( (DR, torch.sqrt(torch.tensor(regularization)) * torch.eye(DR.size(1))) )
        gamma = torch.linalg.lstsq(expanded_matrix, expanded_rhs).solution
 
