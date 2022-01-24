@@ -270,7 +270,7 @@ optimization_classic  = Optimization(net_classic,  trainloader, testloader, opti
 optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, safeguard, 20)
 
 
-# loss_classic,  accuracy_classic,  validation_loss_classic,  validation_accuracy_classic  = optimization_classic.train()
+loss_classic,  accuracy_classic,  validation_loss_classic,  validation_accuracy_classic  = optimization_classic.train()
 loss_anderson, accuracy_anderson, validation_loss_anderson, validation_accuracy_anderson = optimization_anderson.train()
 
 epochs1 = range(0, len(validation_loss_classic))
