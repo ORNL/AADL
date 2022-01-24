@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import torch
 
 def anderson_qr_factorization(X, relaxation=1.0, regularization = 0.0):
