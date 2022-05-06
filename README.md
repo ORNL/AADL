@@ -52,8 +52,8 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 [BSD-3-Clause](https://spdx.org/licenses/BSD-3-Clause.html)
 
 ### Software citation
-"AADL: Anderson Accelerated Deep Learning", Copyright ID#: 81927550 
-https://doi.org/10.11578/dc.20210723.1
+M. Lupo Pasini, V. Reshniak, and M. K. Stoyanov. AADL: Anderson Accelerated Deep Learning. Computer Software. https://github.com/ORNL/AADL.git. 06 Sep. 2021. Web. doi:10.11578/dc.20210723.1. Copyright ID#: 81927550 
+
 
 ### Publications
 M. Lupo Pasini, J. Yin, V. Reshniak and M. K. Stoyanov, "Anderson Acceleration for Distributed Training of Deep Learning Models," SoutheastCon 2022, 2022, pp. 289-295, doi: 10.1109/SoutheastCon48659.2022.9763953.
