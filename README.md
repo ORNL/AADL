@@ -51,7 +51,7 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 ## License
 [BSD-3-Clause](https://spdx.org/licenses/BSD-3-Clause.html)
 
-### Citations
+### Software citation
 "AADL: Anderson Accelerated Deep Learning", Copyright ID#: 81927550 
 https://doi.org/10.11578/dc.20210723.1
 
