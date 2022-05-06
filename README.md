@@ -54,3 +54,7 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 ### Citations
 "AADL: Anderson Accelerated Deep Learning", Copyright ID#: 81927550 
 https://doi.org/10.11578/dc.20210723.1
+
+### Publications
+M. Lupo Pasini, J. Yin, V. Reshniak and M. K. Stoyanov, "Anderson Acceleration for Distributed Training of Deep Learning Models," SoutheastCon 2022, 2022, pp. 289-295, doi: 10.1109/SoutheastCon48659.2022.9763953.
+
