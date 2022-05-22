@@ -29,7 +29,6 @@ def accelerated_step(self, closure=None):
     # perform acceleration
     self.acc_call_counter += 1
     if (self.acc_call_counter > self.acc_wait_iterations) and (self.acc_call_counter % self.acc_frequency == 0):
-        self.acc_call_counter = 0
         for group, group_hist in zip(self.param_groups, self.acc_param_hist):
             if len(group_hist)>=3:
                 # make matrix of updates from the history list
@@ -72,7 +71,6 @@ def distributed_accelerated_step(self, closure=None):
     # perform acceleration
     self.acc_call_counter += 1
     if (self.acc_call_counter > self.acc_wait_iterations) and (self.acc_call_counter % self.acc_frequency == 0):
-        self.acc_call_counter = 0
         for group, group_hist in zip(self.param_groups, self.acc_param_hist):
             if len(group_hist)>=3:
                 # make matrix of updates from the history list
@@ -173,7 +171,6 @@ def averaged_accelerated_step(self, closure=None):
     # perform acceleration
     self.acc_call_counter += 1
     if (self.acc_call_counter > self.acc_wait_iterations) and (self.acc_call_counter % self.acc_frequency == 0):
-        self.acc_call_counter = 0
         for group, group_hist in zip(self.param_groups, self.acc_param_hist):
             if len(group_hist)>=3:
                 # make matrix of updates from the history list
