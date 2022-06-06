@@ -46,14 +46,14 @@ AADL.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, his
 ```
 
 ## Meaning of hyperparameters
-```relaxation```: Float. Linear mixing parameter between a standard gradient descent update and the Anderson update
-```wait_iterations```: Integer. Number of initial gradient descent updates to wait before starting the Anderson scheme
-```history_depth```: Integer. Number of gradient updates used to compute the Anderson mixing. The history is updated with a first-in-first-out policy
-```store_each_nth```: Integer. Number of gradient updates to skip between two vector updates consecutively stored in the history window
-```frequency```: Integer. Number of gradient updates to skip between two consecutive Anderson steps
-```reg_acc```: Float. Tikhonov regularization factor used to stabilize the least-squares problem solved to compute the Anderson mixing vector
-```safeguard```: Boolean. If set to True, the Anderson step overwrites the gradient step only if the training loss function is further reduced
-```average```: Boolean. If set to True, a movign average is applied to the history window before computing the Anderson step 
+```relaxation```: Float. Linear mixing parameter between a standard gradient descent update and the Anderson update\
+```wait_iterations```: Integer. Number of initial gradient descent updates to wait before starting the Anderson scheme\
+```history_depth```: Integer. Number of gradient updates used to compute the Anderson mixing. The history is updated with a first-in-first-out policy\
+```store_each_nth```: Integer. Number of gradient updates to skip between two vector updates consecutively stored in the history window\
+```frequency```: Integer. Number of gradient updates to skip between two consecutive Anderson steps\
+```reg_acc```: Float. Tikhonov regularization factor used to stabilize the least-squares problem solved to compute the Anderson mixing vector\
+```safeguard```: Boolean. If set to True, the Anderson step overwrites the gradient step only if the training loss function is further reduced\
+```average```: Boolean. If set to True, a movign average is applied to the history window before computing the Anderson step\ 
 
 
 ## Contributing
