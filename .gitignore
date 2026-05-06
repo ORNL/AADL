@@ -6,3 +6,7 @@ __pycache__
 datasets
 *.png
 
+# Local virtual environments and editable-install metadata
+.venv/
+*.egg-info/
+

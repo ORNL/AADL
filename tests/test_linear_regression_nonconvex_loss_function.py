@@ -16,6 +16,8 @@ from optimizers import FixedPointIteration, DeterministicAcceleration
 sys.path.append('../model_zoo')
 from LinearRegression_models import LinearRegression
 
+from tests._slow import slow
+
 
 ###############################################################################
 
@@ -203,6 +205,7 @@ def test_linear_regression_anderson(optimiser):
 ###############################################################################
 
 
+@slow
 class TestLinearRegression(unittest.TestCase):
     
     def test_sgd(self):

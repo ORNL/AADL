@@ -8,6 +8,8 @@ from optimizers import FixedPointIteration, DeterministicAcceleration
 sys.path.append('../model_zoo')
 from TestFunctions_models import Rosenbrock
 
+from tests._slow import slow
+
 
 def rosenbrock_regression_points(slope, intercept, n: int = 10):
     # create dummy data for training
@@ -86,6 +88,7 @@ def test_rosenbrock_anderson(dim=2, optimizer='sgd', lr=1.e-4, epochs=10000, thr
 
 
 
+@slow
 class TestFunctions(unittest.TestCase):
     def test_rosenbrock_2d_sgd(self):
         lr = 1.e-4
