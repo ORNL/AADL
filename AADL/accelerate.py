@@ -2,7 +2,12 @@ import os
 
 import torch
 
-from AADL.utils import parameters_to_vector_device, vector_to_parameters
+from AADL.utils import (
+    buffer_row_to_parameters_,
+    parameters_to_buffer_row_,
+    parameters_to_vector_device,
+    vector_to_parameters,
+)
 
 from collections import deque
 from types import MethodType
@@ -26,13 +31,72 @@ def _dist_local_rank():
     return 0
 
 
+def _ensure_buffer(self, state, params):
+    """Lazily allocate the (capacity, numel) ring buffer for one param group."""
+    if state['buf'] is not None:
+        return
+    numel = sum(p.numel() for p in params)
+    dtype = params[0].dtype
+    state['buf'] = torch.empty(
+        self.acc_history_depth, numel,
+        device=self.history_device, dtype=dtype,
+    )
+
+
+def _last_row(state, capacity):
+    """Return the row of ``state['buf']`` holding the most-recent stored vector."""
+    return state['buf'][(state['count'] - 1) % capacity]
+
+
+def _history_chrono(state, capacity, compute_device):
+    """Return chronologically-ordered iterates as a (numel, n) tensor on
+    ``compute_device``, or ``None`` if fewer than 3 entries are available.
+
+    One contiguous allocation regardless of history depth (replaces a
+    per-column ``torch.stack`` over a deque of independent tensors).
+    """
+    count = state['count']
+    n = min(count, capacity)
+    if n < 3:
+        return None
+    buf = state['buf']
+    if count <= capacity:
+        rows = buf[:n]
+    else:
+        idx = count % capacity
+        rows = torch.cat((buf[idx:], buf[:idx]), dim=0)
+    # Move once, then transpose; .contiguous() does the single (numel, n) alloc.
+    return rows.to(device=compute_device).t().contiguous()
+
+
 def _store_current_params(self):
-    """Append current parameters to the acceleration history if it's time to."""
+    """Append current parameters to the ring buffer if it's time to.
+
+    Optimizations vs. the previous deque-based version:
+      * O(1) allocation per step (writes into a pre-allocated buffer row)
+      * single fused ``torch._foreach_copy_`` kernel instead of per-tensor copies
+      * skips entirely during warmup if the stored value would be evicted
+        before the first acceleration call
+    """
+    # #1: skip during warmup when the stored value would be evicted before
+    # acceleration is enabled.
+    capacity = self.acc_history_depth
+    if (self.acc_call_counter + capacity * self.acc_store_each_nth
+            <= self.acc_wait_iterations):
+        return
+
     self.acc_store_counter += 1
-    if self.acc_store_counter >= self.acc_store_each_nth:
-        self.acc_store_counter = 0
-        for group, group_hist in zip(self.param_groups, self.acc_param_hist):
-            group_hist.append(parameters_to_vector_device(group['params'], self.history_device))
+    if self.acc_store_counter < self.acc_store_each_nth:
+        return
+    self.acc_store_counter = 0
+
+    for group, state in zip(self.param_groups, self.acc_param_hist):
+        params = group['params']
+        _ensure_buffer(self, state, params)
+        col_idx = state['count'] % capacity
+        row = state['buf'][col_idx]
+        parameters_to_buffer_row_(params, row)
+        state['count'] += 1
 
 
 def _moving_average_step(self):
@@ -84,16 +148,16 @@ def _safeguard_accept(self, closure, orig_loss):
     return acc_vote.item() > self.acc_vote_threshold, acc_loss
 
 
-def _debug_log_divergence(self, group_hist, acc_param, closure_used, accepted):
+def _debug_log_divergence(self, last_param, acc_param, closure_used, accepted):
     if not self.acc_debug:
         return
     if not (self.acc_distributed and _dist_world_size() > 1):
         return
     rank = _dist_local_rank()
     world_size = _dist_world_size()
-    history_list = [torch.zeros_like(group_hist[-1]) for _ in range(world_size)] if rank == 0 else None
+    history_list = [torch.zeros_like(last_param) for _ in range(world_size)] if rank == 0 else None
     acc_param_list = [torch.zeros_like(acc_param) for _ in range(world_size)] if rank == 0 else None
-    torch.distributed.gather(group_hist[-1], gather_list=history_list, dst=0)
+    torch.distributed.gather(last_param, gather_list=history_list, dst=0)
     torch.distributed.gather(acc_param, gather_list=acc_param_list, dst=0)
     if rank == 0:
         diff_history = sum((h - history_list[0]) for h in history_list)
@@ -126,12 +190,13 @@ def _unified_step(self, closure=None):
 
     final_loss = orig_loss
     accel_fn = anderson.get_acceleration(self.acc_type)
+    capacity = self.acc_history_depth
 
-    for group, group_hist in zip(self.param_groups, self.acc_param_hist):
-        if len(group_hist) < 3:
+    for group, state in zip(self.param_groups, self.acc_param_hist):
+        X = _history_chrono(state, capacity, self.compute_device)
+        if X is None:
             continue
 
-        X = torch.stack(list(group_hist), dim=1).to(device=self.compute_device)
         acc_param = accel_fn(X, self.acc_relaxation, self.acc_reg)
 
         acc_param = _maybe_sync_acc_param(self, acc_param)
@@ -141,20 +206,16 @@ def _unified_step(self, closure=None):
 
         accepted, acc_loss = _safeguard_accept(self, closure, orig_loss)
 
+        last_row = _last_row(state, capacity)
         if accepted:
-            # replace last history entry with the accepted accelerated point
-            group_hist.pop()
-            group_hist.append(
-                acc_param.detach().to(
-                    device=self.history_device, memory_format=torch.contiguous_format
-                )
-            )
+            # overwrite most-recent history slot in place
+            last_row.copy_(acc_param)
             final_loss = acc_loss
         else:
             # revert to the non-accelerated parameters
-            vector_to_parameters(group_hist[-1], group['params'])
+            buffer_row_to_parameters_(last_row, group['params'])
 
-        _debug_log_divergence(self, group_hist, acc_param, closure is not None, accepted)
+        _debug_log_divergence(self, last_row, acc_param, closure is not None, accepted)
 
     return final_loss
 
@@ -190,6 +251,37 @@ def accelerate(
     vote_threshold: float = 0.9,
     debug: bool = False,
 ):
+    """Wrap ``optimizer.step`` to apply Anderson-type acceleration.
+
+    The wrapped ``step`` first delegates to the underlying optimizer, stores
+    the resulting parameter vector in a per-group ring buffer, and -- once
+    enough history has accumulated -- replaces the parameters with an
+    Anderson-accelerated extrapolation.  When a ``closure`` is supplied the
+    accelerated step is safeguarded by re-evaluating the loss and reverting
+    if it did not decrease.
+
+    Notes on ``closure``:
+        Passing a ``closure`` enables the safeguard above but costs one extra
+        forward pass *per accepted acceleration cycle*.  To amortize this,
+        increase ``frequency`` so acceleration (and the extra forward) is
+        attempted only every Nth optimizer step.  When ``closure`` is
+        ``None`` no safeguard is performed and the accelerated step is
+        always accepted.
+
+    Parameters
+    ----------
+    acceleration_type : {"identity", "anderson", "anderson_normal_equation"}
+    relaxation : float in (0, 1]
+        Convex mixing weight between the Anderson extrapolation and the
+        constrained-LS combination of past iterates.
+    history_depth : int
+        Capacity of the ring buffer of past iterates.
+    store_each_nth, frequency : int
+        Cadence of buffer writes / acceleration attempts.
+    reg_acc : float >= 0
+        Tikhonov regularization for the inner least-squares solve.
+    debug, vote_threshold : runtime-configurable distributed safeguards.
+    """
     # validate acceleration type early
     acc_type = acceleration_type.lower()
     if acc_type != "identity":
@@ -209,8 +301,11 @@ def accelerate(
     optimizer.acc_debug           = debug
     optimizer.acc_average_pre_step = average and acc_type != "identity"
 
-    # acceleration history
-    optimizer.acc_param_hist = [deque([], maxlen=history_depth) for _ in optimizer.param_groups]
+    # acceleration history: ring buffer per param group, lazily allocated
+    # on first store so we can pick up dtype/numel from the actual params.
+    optimizer.acc_param_hist = [{'buf': None, 'count': 0} for _ in optimizer.param_groups]
+    # avg_param_hist is only used by the (rare) moving-average path; keep
+    # the simple deque representation.
     optimizer.avg_param_hist = [deque([], maxlen=history_depth) for _ in optimizer.param_groups]
 
     optimizer.acc_call_counter  = 0

@@ -31,18 +31,25 @@ def anderson_qr_factorization(X, relaxation=1.0, regularization=0.0):
 
     DX, DR = _compute_differences(X)
 
+    # Solve min_gamma || A gamma - b ||_2 explicitly via QR + triangular solve.
+    # For tall-skinny A (numel >> history) this is measurably faster and more
+    # stable than torch.linalg.lstsq, which dispatches to a generic SVD/LU
+    # driver on most builds.
     if regularization == 0.0:
-        # solve unconstrained least-squares problem
-        gamma = torch.linalg.lstsq(DR, DX[:, -1]).solution
+        A = DR
+        b = DX[:, -1]
     else:
-        # solve augmented least-squares for Tykhonov regularization
-        rhs = DX[:, -1]
-        zero_pad = torch.zeros(DR.size(1), device=DR.device, dtype=DR.dtype)
-        eye = torch.eye(DR.size(1), device=DR.device, dtype=DR.dtype)
+        # Augmented system for Tikhonov regularization.
         sqrt_reg = torch.sqrt(torch.tensor(regularization, device=DR.device, dtype=DR.dtype))
-        expanded_rhs = torch.cat((rhs, zero_pad))
-        expanded_matrix = torch.cat((DR, sqrt_reg * eye))
-        gamma = torch.linalg.lstsq(expanded_matrix, expanded_rhs).solution
+        eye = torch.eye(DR.size(1), device=DR.device, dtype=DR.dtype)
+        zero_pad = torch.zeros(DR.size(1), device=DR.device, dtype=DR.dtype)
+        A = torch.cat((DR, sqrt_reg * eye), dim=0)
+        b = torch.cat((DX[:, -1], zero_pad), dim=0)
+
+    Q, R = torch.linalg.qr(A, mode='reduced')
+    gamma = torch.linalg.solve_triangular(
+        R, (Q.transpose(-2, -1) @ b).unsqueeze(-1), upper=True,
+    ).squeeze(-1)
 
     extr = X[:, -2] + DX[:, -1] - (DX[:, :-1] + DR) @ gamma
     return _apply_relaxation(extr, X, DX, gamma, relaxation)
