@@ -235,6 +235,58 @@ class TestAccelerateAPI(unittest.TestCase):
             "safeguard wrongly accepted a candidate worse than the plain step",
         )
 
+    def test_safeguard_rejects_nonfinite_candidate(self):
+        # A rank-deficient / singular solve can yield NaN or Inf. The safeguard
+        # must reject such a candidate (NaN/Inf < base_loss is False) and revert
+        # to the plain optimizer step, leaving the parameters finite.
+        import AADL.anderson_acceleration as anderson_mod
+        from torch.nn.utils import parameters_to_vector
+
+        for bad_value in (float("nan"), float("inf")):
+            model = self._fresh_model()
+            opt = torch.optim.SGD(model.parameters(), lr=1e-2)
+            accelerate(
+                opt, acceleration_type="anderson", wait_iterations=1,
+                history_depth=6, frequency=1, store_each_nth=1,
+            )
+            loss_fn = torch.nn.MSELoss()
+            X, y = self.X, self.y.unsqueeze(1)
+
+            def closure():
+                with torch.enable_grad():
+                    opt.zero_grad()
+                    loss = loss_fn(model(X), y)
+                    loss.backward()
+                return loss
+
+            for _ in range(6):
+                opt.step(closure)
+            pre = float(loss_fn(model(X), y))
+
+            def _nonfinite(Xhist, *args, **kwargs):
+                return torch.full(
+                    (Xhist.size(0),), bad_value,
+                    dtype=Xhist.dtype, device=Xhist.device,
+                )
+
+            original = anderson_mod.get_acceleration
+            anderson_mod.get_acceleration = lambda acc_type: _nonfinite
+            try:
+                opt.step(closure)
+            finally:
+                anderson_mod.get_acceleration = original
+
+            final = parameters_to_vector(model.parameters()).detach()
+            self.assertTrue(
+                torch.isfinite(final).all(),
+                f"non-finite ({bad_value}) candidate was not rejected",
+            )
+            post = float(loss_fn(model(X), y))
+            self.assertLessEqual(
+                post, pre + 1e-6,
+                f"safeguard let a non-finite ({bad_value}) candidate through",
+            )
+
     def test_unknown_acceleration_type_raises(self):
         opt = torch.optim.SGD(self._fresh_model().parameters(), lr=1e-2)
         with self.assertRaises(ValueError):
