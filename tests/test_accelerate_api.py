@@ -17,6 +17,44 @@ import torch
 from AADL import accelerate, remove_acceleration
 
 
+def _free_port():
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
+
+
+def _vote_worker(rank, world_size, port, threshold, result_queue):
+    """Run ``_safeguard_accept`` inside a gloo process group and report the
+    (all-reduced) accept decision. Rank 0 votes to accept, all others reject,
+    so the accepting fraction is ``1 / world_size``.
+    """
+    import os
+    import torch.distributed as dist
+
+    os.environ["MASTER_ADDR"] = "127.0.0.1"
+    os.environ["MASTER_PORT"] = str(port)
+    dist.init_process_group("gloo", rank=rank, world_size=world_size)
+    try:
+        from AADL.accelerate import _safeguard_accept
+
+        class _Dummy:
+            pass
+
+        self = _Dummy()
+        self.acc_distributed = True
+        self.acc_vote_threshold = threshold
+
+        base_loss = torch.tensor(1.0)
+        acc_loss = torch.tensor(0.0 if rank == 0 else 2.0)  # rank 0 improves
+        accepted, _ = _safeguard_accept(self, lambda: acc_loss, base_loss)
+        result_queue.put((rank, bool(accepted)))
+    finally:
+        dist.destroy_process_group()
+
+
 def _make_problem(n=64, d=8, seed=0):
     g = torch.Generator().manual_seed(seed)
     X = torch.randn(n, d, generator=g)
@@ -222,6 +260,88 @@ class TestAccelerateAPI(unittest.TestCase):
         original_step_func = opt.step.__func__
         accelerate(opt, acceleration_type="identity", average=False)
         self.assertIs(opt.step.__func__, original_step_func)
+
+    def test_closure_none_disables_safeguard(self):
+        # With no closure there is no loss to compare against, so the safeguard
+        # is skipped and the accelerated candidate is accepted unconditionally.
+        import AADL.anderson_acceleration as anderson_mod
+        from torch.nn.utils import parameters_to_vector
+
+        model = self._fresh_model()
+        opt = torch.optim.SGD(model.parameters(), lr=1e-2)
+        accelerate(
+            opt, acceleration_type="anderson", wait_iterations=1,
+            history_depth=6, frequency=1, store_each_nth=1,
+        )
+        loss_fn = torch.nn.MSELoss()
+        X, y = self.X, self.y.unsqueeze(1)
+
+        def closure():
+            with torch.enable_grad():
+                opt.zero_grad()
+                loss = loss_fn(model(X), y)
+                loss.backward()
+            return loss
+
+        for _ in range(6):
+            opt.step(closure)  # build history (and leave valid .grad)
+
+        # A candidate a safeguard would reject; without a closure it is kept.
+        def _const(Xhist, *args, **kwargs):
+            return torch.full(
+                (Xhist.size(0),), 3.0, dtype=Xhist.dtype, device=Xhist.device
+            )
+
+        original = anderson_mod.get_acceleration
+        anderson_mod.get_acceleration = lambda acc_type: _const
+        try:
+            opt.step(None)  # no closure -> no safeguard
+        finally:
+            anderson_mod.get_acceleration = original
+
+        final = parameters_to_vector(model.parameters()).detach()
+        self.assertTrue(
+            torch.allclose(final, torch.full_like(final, 3.0), atol=1e-6),
+            "closure=None should accept the candidate unconditionally",
+        )
+
+    def test_distributed_vote_threshold(self):
+        # The distributed safeguard accepts iff the fraction of ranks voting to
+        # accept exceeds acc_vote_threshold. With 2 ranks and only rank 0
+        # improving, the accepting fraction is 0.5.
+        if not (torch.distributed.is_available()
+                and torch.distributed.is_gloo_available()):
+            self.skipTest("gloo backend not available")
+        import queue
+        import torch.multiprocessing as mp
+
+        ctx = mp.get_context("spawn")
+        for threshold, expected in [(0.4, True), (0.9, False)]:
+            result_queue = ctx.Queue()
+            port = _free_port()
+            procs = [
+                ctx.Process(
+                    target=_vote_worker,
+                    args=(rank, 2, port, threshold, result_queue),
+                )
+                for rank in range(2)
+            ]
+            for p in procs:
+                p.start()
+            try:
+                results = [result_queue.get(timeout=60) for _ in range(2)]
+            except queue.Empty:
+                for p in procs:
+                    p.terminate()
+                self.skipTest("could not launch distributed workers")
+            for p in procs:
+                p.join(timeout=60)
+
+            for rank, accepted in results:
+                self.assertEqual(
+                    accepted, expected,
+                    f"rank {rank}: threshold={threshold} expected {expected}",
+                )
 
 
 if __name__ == "__main__":
