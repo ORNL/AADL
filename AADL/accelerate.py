@@ -197,7 +197,7 @@ def _unified_step(self, closure=None):
         if X is None:
             continue
 
-        acc_param = accel_fn(X, self.acc_relaxation, self.acc_reg)
+        acc_param = accel_fn(X, self.acc_relaxation, self.acc_reg, self.acc_dtype)
 
         acc_param = _maybe_sync_acc_param(self, acc_param)
 
@@ -250,6 +250,7 @@ def accelerate(
     sync_frequency: int = 1,
     vote_threshold: float = 0.9,
     debug: bool = False,
+    mixing_dtype=None,
 ):
     """Wrap ``optimizer.step`` to apply Anderson-type acceleration.
 
@@ -280,6 +281,12 @@ def accelerate(
         Cadence of buffer writes / acceleration attempts.
     reg_acc : float >= 0
         Tikhonov regularization for the inner least-squares solve.
+    mixing_dtype : None | torch.dtype | str
+        Floating-point precision used to compute the Anderson mixing vector
+        (e.g. ``torch.float32`` or ``"float64"``). ``None`` keeps the
+        parameter dtype. Lower precision speeds up the least-squares solve;
+        the extrapolated parameters are always cast back to their original
+        dtype before being written to the model.
     debug, vote_threshold : runtime-configurable distributed safeguards.
     """
     # validate acceleration type early
@@ -296,6 +303,7 @@ def accelerate(
     optimizer.acc_frequency       = frequency
     optimizer.acc_sync_frequency  = sync_frequency
     optimizer.acc_reg             = reg_acc
+    optimizer.acc_dtype           = anderson._resolve_dtype(mixing_dtype)
     optimizer.acc_distributed     = distributed
     optimizer.acc_vote_threshold  = vote_threshold
     optimizer.acc_debug           = debug
@@ -334,6 +342,7 @@ def distributed_accelerate(optimizer, **kwargs):
 _ACC_ATTRS = (
     "acc_type", "acc_wait_iterations", "acc_relaxation", "acc_history_depth",
     "acc_frequency", "acc_sync_frequency", "acc_store_each_nth", "acc_reg",
+    "acc_dtype",
     "acc_distributed", "acc_vote_threshold", "acc_debug", "acc_average_pre_step",
     "acc_param_hist", "avg_param_hist",
     "acc_call_counter", "acc_store_counter", "acc_sync_counter",
