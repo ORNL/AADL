@@ -10,6 +10,8 @@ from optimizers import FixedPointIteration, DeterministicAcceleration
 sys.path.append('../model_zoo')
 from NN_models import MLP
 
+from tests._slow import slow
+
 
 ###############################################################################
 
@@ -148,6 +150,7 @@ def test_neural_network_linear_regression_anderson(optimizer):
 ###############################################################################
 
 
+@slow
 class TestLinearRegression(unittest.TestCase):
     def test_neural_network_linear_regression_sgd(self):
         test_neural_network_linear_regression('sgd')

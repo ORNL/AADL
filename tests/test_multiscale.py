@@ -7,6 +7,8 @@ from optimizers import FixedPointIteration, DeterministicAcceleration
 sys.path.append('../model_zoo')
 from TestFunctions_models import Paraboloid
 
+from tests._slow import slow
+
 
 ###############################################################################
 
@@ -70,16 +72,19 @@ def test_multiscale_paraboloid_anderson(dim=100,condition_number=1.0e3,optimizer
 class TestMultiscaleParaboloid(unittest.TestCase):
     
 
+    @slow
     def test_2d_well_conditioned_paraboloid_sgd(self):
         weight_sum, history = test_multiscale_paraboloid(dim=2, condition_number=1, optimizer='sgd', lr=1.e-2, epochs=10000)
         print("Well conditioned problem - 2d SGD finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
 
+    @slow
     def test_2d_well_conditioned_paraboloid_rmsprop(self):
         weight_sum, history = test_multiscale_paraboloid(dim=2, condition_number=1, optimizer='rmsprop', lr=1.e-2, epochs=10000)
         print("Well conditioned problem - 2d RMSProp finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
 
+    @slow
     def test_2d_well_conditioned_paraboloid_adam(self):
         weight_sum, history = test_multiscale_paraboloid(dim=2, condition_number=1, optimizer='adam', lr=1.e-2, epochs=10000)
         print("Well conditioned problem - 2d Adam finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
@@ -89,16 +94,19 @@ class TestMultiscaleParaboloid(unittest.TestCase):
     ###########
 
 
+    @slow
     def test_2d_well_conditioned_paraboloid_sgd_anderson(self):
         weight_sum, history = test_multiscale_paraboloid_anderson(dim=2, condition_number=1, optimizer='sgd', lr=1.e-3, epochs=10000)
         print("Well conditioned problem - 2d SGD + Anderson finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
 
+    @slow
     def test_2d_well_conditioned_paraboloid_rmsprop_anderson(self):
         weight_sum, history = test_multiscale_paraboloid_anderson(dim=2, condition_number=1, optimizer='rmsprop', lr=1.e-3, epochs=10000)
         print("Well conditioned problem - 2d RMSProp + Anderson finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
 
+    @slow
     def test_2d_well_conditioned_paraboloid_adam_anderson(self):
         weight_sum, history = test_multiscale_paraboloid_anderson(dim=2, condition_number=1, optimizer='adam', lr=1.e-3, epochs=10000)
         print("Well conditioned problem - 2d Adam + Anderson finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
@@ -107,19 +115,25 @@ class TestMultiscaleParaboloid(unittest.TestCase):
     ###########
 
 
+    @slow
     def test_100d_well_conditioned_paraboloid_sgd(self):
-        weight_sum, history = test_multiscale_paraboloid_anderson(dim=2, condition_number=1, optimizer='sgd', lr=1.e-3, epochs=1000)
+        # FIX: previously called the *_anderson helper with dim=2 — now matches the test name.
+        weight_sum, history = test_multiscale_paraboloid(dim=100, condition_number=1, optimizer='sgd', lr=1.e-3, epochs=10000)
         print("Well conditioned problem - 100d SGD finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
 
 
+    @slow
     def test_100d_well_conditioned_paraboloid_rmsprop(self):
-        weight_sum, history = test_multiscale_paraboloid_anderson(dim=100, condition_number=1, optimizer='rmsprop', lr=1.e-3, epochs=10000)
+        # FIX: previously called the *_anderson helper.
+        weight_sum, history = test_multiscale_paraboloid(dim=100, condition_number=1, optimizer='rmsprop', lr=1.e-3, epochs=10000)
         print("Well conditioned problem - 100d RMSProp finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
 
+    @slow
     def test_100d_well_conditioned_paraboloid_adam(self):
-        weight_sum, history = test_multiscale_paraboloid_anderson(dim=100, condition_number=1, optimizer='adam', lr=1.e-3, epochs=10000)
+        # FIX: previously called the *_anderson helper.
+        weight_sum, history = test_multiscale_paraboloid(dim=100, condition_number=1, optimizer='adam', lr=1.e-3, epochs=10000)
         print("Well conditioned problem - 100d Adam finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
         
@@ -128,17 +142,21 @@ class TestMultiscaleParaboloid(unittest.TestCase):
 
 
 
+    @slow
     def test_100d_well_conditioned_paraboloid_sgd_anderson(self):
-        weight_sum, history = test_multiscale_paraboloid_anderson(dim=2, condition_number=1, optimizer='sgd', lr=1.e-3, epochs=1000)
+        # FIX: previously called with dim=2.
+        weight_sum, history = test_multiscale_paraboloid_anderson(dim=100, condition_number=1, optimizer='sgd', lr=1.e-3, epochs=10000)
         print("Well conditioned problem - 100d SGD + Anderson finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
     
  
+    @slow
     def test_100d_well_conditioned_paraboloid_rmsprop_anderson(self):
         weight_sum, history = test_multiscale_paraboloid_anderson(dim=100, condition_number=1, optimizer='rmsprop', lr=1.e-3, epochs=10000)
         print("Well conditioned problem - 100d RMSProp + Anderson finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
 
+    @slow
     def test_100d_well_conditioned_paraboloid_adam_anderson(self):
         weight_sum, history = test_multiscale_paraboloid_anderson(dim=100, condition_number=1, optimizer='adam', lr=1.e-3, epochs=10000)
         print("Well conditioned problem - 100d Adam + Anderson finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
@@ -148,16 +166,19 @@ class TestMultiscaleParaboloid(unittest.TestCase):
     ###########
 
 
+    @slow
     def test_100d_ill_conditioned_paraboloid_sgd(self):
         weight_sum, history = test_multiscale_paraboloid(dim=100, condition_number=1.e3, optimizer='sgd', lr=1.e-3, epochs=10000)
         print("Ill conditioned problem - 100d SGD finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
 
+    @slow
     def test_100d_ill_conditioned_paraboloid_rmsprop(self):
         weight_sum, history = test_multiscale_paraboloid(dim=100, condition_number=1.e3, optimizer='rmsprop', lr=1.e-3, epochs=10000)
         print("Ill conditioned problem - 100d RMSProp finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
 
+    @slow
     def test_100d_ill_conditioned_paraboloid_adam(self):
         weight_sum, history = test_multiscale_paraboloid(dim=100, condition_number=1.e3, optimizer='adam', lr=1.e-3, epochs=10000)
         print("Ill conditioned problem - 100d Adam finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
@@ -167,16 +188,19 @@ class TestMultiscaleParaboloid(unittest.TestCase):
     ###########
 
 
+    @slow
     def test_100d_ill_conditioned_paraboloid_sgd_anderson(self):
         weight_sum, history = test_multiscale_paraboloid_anderson(dim=100, condition_number=1.e3, optimizer='sgd', lr=1.e-3, epochs=10000)
         print("Ill conditioned problem - 100d SGD + Anderson finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
 
+    @slow
     def test_100d_ill_conditioned_paraboloid_rmsprop_anderson(self):
         weight_sum, history = test_multiscale_paraboloid_anderson(dim=100, condition_number=1.e3, optimizer='rmsprop', lr=1.e-3, epochs=10000)
         print("Ill conditioned problem - 100d RMSProp + Anderson finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))
         self.assertTrue(weight_sum<1e-3)
 
+    @slow
     def test_100d_ill_conditioned_paraboloid_adam_anderson(self):
         weight_sum, history = test_multiscale_paraboloid_anderson(dim=100, condition_number=1.e3, optimizer='adam', lr=1.e-3, epochs=10000)
         print("Ill conditioned problem - 100d Adam + Anderson finished after "+str(len(history))+" iterations "+"\n exact weight sum: 0"+"  - "+" numerical weight sum: "+str(weight_sum))

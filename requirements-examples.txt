@@ -1,0 +1,13 @@
+# Additional dependencies required only to run the demos under examples/.
+# Install with:  pip install -r requirements-examples.txt
+# (this also pulls in the core requirements below).
+-r requirements.txt
+
+matplotlib
+torchvision
+pandas
+scikit-learn
+scikit-image
+opencv-python
+docopt
+pyyaml
