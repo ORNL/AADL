@@ -48,85 +48,248 @@ def _apply_relaxation(extr, X, DX, gamma, relaxation):
     return relaxation * extr + (1 - relaxation) * X[:, :-1] @ alpha
 
 
-def anderson_qr_factorization(X, relaxation=1.0, regularization=0.0, dtype=None):
+def _equilibrate_columns(A):
+    """Scale each column of ``A`` to unit L2 norm.
+
+    Returns ``(A_scaled, scale)`` where ``scale[j] = ||A[:, j]||``. Zero-norm
+    columns are left unscaled to avoid division by zero. Solving the scaled
+    least-squares problem and dividing the solution by ``scale`` recovers the
+    original solution while improving the conditioning of the solve.
+    """
+    scale = A.norm(dim=0)
+    safe = torch.where(scale > 0, scale, torch.ones_like(scale))
+    return A / safe, safe
+
+
+def _num_oldest_to_drop(A, cond_threshold):
+    """Walker-Ni filtering: how many oldest (leftmost) columns of ``A`` to drop
+    so the remaining matrix has 2-norm condition number <= ``cond_threshold``.
+
+    Works on the small ``k x k`` Gram matrix ``G = A^T A`` (k = history depth),
+    using ``cond(A[:, d:]) = sqrt(cond(G[d:, d:]))``. Returns 0 when filtering
+    is disabled (``cond_threshold`` falsy / <= 0) or unnecessary.
+    """
+    if not cond_threshold or cond_threshold <= 0:
+        return 0
+    k = A.size(1)
+    if k <= 1:
+        return 0
+    G = A.t() @ A
+    eps = torch.finfo(G.dtype).eps
+    for d in range(k - 1):
+        ev = torch.linalg.eigvalsh(G[d:, d:])
+        lo = ev[0].clamp_min(eps)
+        if torch.sqrt(ev[-1] / lo) <= cond_threshold:
+            return d
+    return k - 1  # keep at least one column
+
+
+def _iterative_refine(y, DR_high, b_high, scale_high, reg, steps, correction_solve):
+    """Mixed-precision iterative refinement of the scaled LS variable ``y``.
+
+    ``y`` solves ``min ||A_s y - b||^2 + reg ||y||^2`` with ``A_s`` the
+    unit-column-scaled ``DR``. Each step forms the (regularized) normal-equation
+    gradient residual in high precision and applies the supplied low-precision
+    ``correction_solve`` (an approximate inverse of ``A_s^T A_s + reg I``),
+    recovering high-precision accuracy at ``O(numel * k)`` cost per step.
+
+    A monotone guard rejects any step that does not decrease the gradient-residual
+    norm and stops early. This keeps refinement safe on very ill-conditioned
+    systems (where the reduced-precision factor is a poor preconditioner and the
+    plain iteration could diverge): the result is never worse than the input.
+    Returns the refined ``y`` in ``DR_high.dtype``.
+    """
+    y = y.to(DR_high.dtype)
+    A_s = DR_high / scale_high
+
+    def _grad(v):
+        return A_s.t() @ (b_high - A_s @ v) - reg * v
+
+    g = _grad(y)
+    gnorm = g.norm()
+    for _ in range(steps):
+        y_new = y + correction_solve(g)
+        g_new = _grad(y_new)
+        gnorm_new = g_new.norm()
+        if not torch.isfinite(gnorm_new) or gnorm_new >= gnorm:
+            break
+        y, g, gnorm = y_new, g_new, gnorm_new
+    return y
+
+
+
+def _anderson_extrapolate(X, DX, DR, b, gamma, n_drop, relaxation):
+    """Assemble the Anderson extrapolation from a mixing vector ``gamma``.
+
+    ``gamma`` corresponds to columns ``[n_drop:]`` of ``DR`` (and of
+    ``DX[:, :-1]``) after column filtering. Computed in ``X``'s dtype.
+    """
+    DXsub = DX[:, n_drop:-1]
+    DR_k = DR[:, n_drop:]
+    extr = X[:, -2] + b - (DXsub + DR_k) @ gamma
+    return _apply_relaxation(extr, X[:, n_drop:], DX, gamma, relaxation)
+
+
+def anderson_qr_factorization(X, relaxation=1.0, regularization=0.0, dtype=None,
+                              equilibrate=True, filter_condition=0.0,
+                              refinement_steps=0):
     # Anderson Acceleration
     # Take a matrix X of iterates such that X[:,i] = g(X[:,i-1])
     # Return acceleration for X[:,-1]
     #
-    # ``dtype`` optionally selects the floating-point precision used to compute
-    # the mixing vector (e.g. float32 for speed, float64 for accuracy). The
-    # returned extrapolation is always cast back to X's original dtype.
+    # ``dtype``            precision used to compute the mixing vector.
+    # ``equilibrate``      unit-scale DR columns before the solve (#5).
+    # ``filter_condition`` >0 drops oldest columns until cond(DR) <= it (#4).
+    # ``refinement_steps`` >0 does mixed-precision iterative refinement (#6).
+    # The extrapolation is always assembled in X's original dtype.
 
     assert X.ndim == 2, "X must be a matrix"
     assert regularization >= 0.0, "regularization for least-squares must be >=0.0"
 
     orig_dtype = X.dtype
     compute_dtype = _resolve_dtype(dtype)
-    if compute_dtype is not None and compute_dtype != orig_dtype:
-        X = X.to(compute_dtype)
+    downcast = compute_dtype is not None and compute_dtype != orig_dtype
 
+    # Differences in the original (high) precision; reused for the extrapolation
+    # and the refinement residual.
     DX, DR = _compute_differences(X)
+    b = DX[:, -1]
 
-    # Solve min_gamma || A gamma - b ||_2 explicitly via QR + triangular solve.
-    # For tall-skinny A (numel >> history) this is measurably faster and more
+    # Matrix actually factorized (optionally in reduced precision).
+    DR_c = DR.to(compute_dtype) if downcast else DR
+
+    # #4 Walker-Ni column filtering.
+    n_drop = _num_oldest_to_drop(DR_c, filter_condition)
+    DR_c = DR_c[:, n_drop:]
+
+    # #5 Column equilibration.
+    if equilibrate:
+        A_s, scale = _equilibrate_columns(DR_c)
+    else:
+        A_s = DR_c
+        scale = torch.ones(DR_c.size(1), device=DR_c.device, dtype=DR_c.dtype)
+    b_c = b.to(A_s.dtype)
+
+    # Solve min_y || A_s y - b ||_2 (+ Tikhonov) via QR + triangular solve.
+    # For tall-skinny A_s (numel >> history) this is measurably faster and more
     # stable than torch.linalg.lstsq, which dispatches to a generic SVD/LU
     # driver on most builds.
     if regularization == 0.0:
-        A = DR
-        b = DX[:, -1]
+        A = A_s
+        rhs = b_c
     else:
-        # Augmented system for Tikhonov regularization.
-        sqrt_reg = torch.sqrt(torch.tensor(regularization, device=DR.device, dtype=DR.dtype))
-        eye = torch.eye(DR.size(1), device=DR.device, dtype=DR.dtype)
-        zero_pad = torch.zeros(DR.size(1), device=DR.device, dtype=DR.dtype)
-        A = torch.cat((DR, sqrt_reg * eye), dim=0)
-        b = torch.cat((DX[:, -1], zero_pad), dim=0)
+        sqrt_reg = torch.sqrt(torch.tensor(regularization, device=A_s.device, dtype=A_s.dtype))
+        eye = torch.eye(A_s.size(1), device=A_s.device, dtype=A_s.dtype)
+        zero_pad = torch.zeros(A_s.size(1), device=A_s.device, dtype=A_s.dtype)
+        A = torch.cat((A_s, sqrt_reg * eye), dim=0)
+        rhs = torch.cat((b_c, zero_pad))
 
     try:
         Q, R = torch.linalg.qr(A, mode='reduced')
-        gamma = torch.linalg.solve_triangular(
-            R, (Q.transpose(-2, -1) @ b).unsqueeze(-1), upper=True,
+        y = torch.linalg.solve_triangular(
+            R, (Q.transpose(-2, -1) @ rhs).unsqueeze(-1), upper=True,
         ).squeeze(-1)
     except NotImplementedError as err:
         _reraise_linalg_dtype_error(err, A)
 
-    extr = X[:, -2] + DX[:, -1] - (DX[:, :-1] + DR) @ gamma
-    extr = _apply_relaxation(extr, X, DX, gamma, relaxation)
-    return extr.to(orig_dtype) if extr.dtype != orig_dtype else extr
+    # #6 Mixed-precision iterative refinement. R^T R = A_s^T A_s + reg I, so R
+    # provides the correction operator for the regularized normal equations.
+    if refinement_steps > 0:
+        R_h = R.to(orig_dtype)
+
+        def _corr(g):
+            z = torch.linalg.solve_triangular(
+                R_h.transpose(-2, -1), g.unsqueeze(-1), upper=False)
+            dy = torch.linalg.solve_triangular(R_h, z, upper=True)
+            return dy.squeeze(-1)
+
+        scale_h = scale.to(orig_dtype)
+        y = _iterative_refine(y, DR[:, n_drop:], b, scale_h,
+                              regularization, refinement_steps, _corr)
+        gamma = (y / scale_h).to(orig_dtype)
+    else:
+        gamma = (y / scale).to(orig_dtype)
+
+    return _anderson_extrapolate(X, DX, DR, b, gamma, n_drop, relaxation)
 
 
-def anderson_normal_equation(X, relaxation=1.0, regularization=0.0, dtype=None):
+def anderson_normal_equation(X, relaxation=1.0, regularization=0.0, dtype=None,
+                             equilibrate=True, filter_condition=0.0,
+                             refinement_steps=0):
     # Anderson Acceleration via the normal equations
     # Take a matrix X of iterates such that X[:,i] = g(X[:,i-1])
     # Return acceleration for X[:,-1]
     #
-    # ``dtype`` optionally selects the floating-point precision used to compute
-    # the mixing vector (e.g. float32 for speed, float64 for accuracy). The
-    # returned extrapolation is always cast back to X's original dtype.
+    # See ``anderson_qr_factorization`` for the shared options
+    # (dtype / equilibrate / filter_condition / refinement_steps).
 
     assert X.ndim == 2, "X must be a matrix"
     assert regularization >= 0.0, "regularization for least-squares must be >=0.0"
 
     orig_dtype = X.dtype
     compute_dtype = _resolve_dtype(dtype)
-    if compute_dtype is not None and compute_dtype != orig_dtype:
-        X = X.to(compute_dtype)
+    downcast = compute_dtype is not None and compute_dtype != orig_dtype
 
     DX, DR = _compute_differences(X)
+    b = DX[:, -1]
 
-    RR = DR.t() @ DR
+    DR_c = DR.to(compute_dtype) if downcast else DR
+
+    # #4 Walker-Ni column filtering.
+    n_drop = _num_oldest_to_drop(DR_c, filter_condition)
+    DR_c = DR_c[:, n_drop:]
+
+    # #5 Column equilibration.
+    if equilibrate:
+        A_s, scale = _equilibrate_columns(DR_c)
+    else:
+        A_s = DR_c
+        scale = torch.ones(DR_c.size(1), device=DR_c.device, dtype=DR_c.dtype)
+    b_c = b.to(A_s.dtype)
+
+    RR = A_s.t() @ A_s
     if regularization != 0.0:
-        RR = RR + regularization * torch.eye(DR.size(1), device=DR.device, dtype=DR.dtype)
+        RR = RR + regularization * torch.eye(A_s.size(1), device=A_s.device, dtype=A_s.dtype)
 
-    projected_residual = DR.t() @ DX[:, -1].unsqueeze(1)
+    projected_residual = A_s.t() @ b_c.unsqueeze(1)
+    use_chol = False
     try:
-        gamma = torch.linalg.solve(RR, projected_residual).view(-1)
+        # RR is symmetric positive (semi-)definite. When it is positive definite
+        # (always so for regularization > 0) a Cholesky factorization exploits
+        # that structure and is ~2x faster and more stable than the general LU
+        # driver used by torch.linalg.solve. cholesky_ex reports failure via an
+        # info flag instead of raising, so we can cheaply fall back to LU when
+        # RR is only semidefinite (e.g. a rank-deficient history at reg == 0).
+        L, info = torch.linalg.cholesky_ex(RR)
+        if int(info) == 0:
+            use_chol = True
+            y = torch.cholesky_solve(projected_residual, L).view(-1)
+        else:
+            y = torch.linalg.solve(RR, projected_residual).view(-1)
     except NotImplementedError as err:
         _reraise_linalg_dtype_error(err, RR)
 
-    extr = X[:, -2] + DX[:, -1] - (DX[:, :-1] + DR) @ gamma
-    extr = _apply_relaxation(extr, X, DX, gamma, relaxation)
-    return extr.to(orig_dtype) if extr.dtype != orig_dtype else extr
+    # #6 Mixed-precision iterative refinement via the (Cholesky/LU) factor of RR.
+    if refinement_steps > 0:
+        if use_chol:
+            L_h = L.to(orig_dtype)
+
+            def _corr(g):
+                return torch.cholesky_solve(g.unsqueeze(1), L_h).view(-1)
+        else:
+            RR_h = RR.to(orig_dtype)
+
+            def _corr(g):
+                return torch.linalg.solve(RR_h, g.unsqueeze(1)).view(-1)
+
+        scale_h = scale.to(orig_dtype)
+        y = _iterative_refine(y, DR[:, n_drop:], b, scale_h,
+                              regularization, refinement_steps, _corr)
+        gamma = (y / scale_h).to(orig_dtype)
+    else:
+        gamma = (y / scale).to(orig_dtype)
+
+    return _anderson_extrapolate(X, DX, DR, b, gamma, n_drop, relaxation)
 
 
 _ACCELERATIONS = {

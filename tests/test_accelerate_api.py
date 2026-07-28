@@ -91,6 +91,112 @@ class TestAccelerateAPI(unittest.TestCase):
                         f"AAR did not speed up: baseline={baseline_iters}, "
                         f"accelerated={acc_iters}")
 
+    def test_safeguard_rejects_divergent_candidate(self):
+        # The safeguard must reject an accelerated candidate that is worse than
+        # the plain optimizer step and revert to that plain step, comparing
+        # against the *post-step* loss (not the stale pre-step loss).
+        import AADL.anderson_acceleration as anderson_mod
+
+        model = self._fresh_model()
+        opt = torch.optim.SGD(model.parameters(), lr=1e-2)
+        accelerate(
+            opt, acceleration_type="anderson", wait_iterations=1,
+            history_depth=6, frequency=1, store_each_nth=1,
+        )
+        loss_fn = torch.nn.MSELoss()
+        X, y = self.X, self.y.unsqueeze(1)
+
+        def closure():
+            with torch.enable_grad():
+                opt.zero_grad()
+                loss = loss_fn(model(X), y)
+                loss.backward()
+            return loss
+
+        # Warm up the history with the real kernel.
+        for _ in range(6):
+            opt.step(closure)
+        pre = float(loss_fn(model(X), y))
+
+        # Force a divergent extrapolation; the safeguard must reject it and keep
+        # the plain optimizer step instead.
+        def _divergent(Xhist, *args, **kwargs):
+            return torch.full(
+                (Xhist.size(0),), 1e6, dtype=Xhist.dtype, device=Xhist.device
+            )
+
+        original = anderson_mod.get_acceleration
+        anderson_mod.get_acceleration = lambda acc_type: _divergent
+        try:
+            opt.step(closure)
+        finally:
+            anderson_mod.get_acceleration = original
+
+        post = float(loss_fn(model(X), y))
+        self.assertLess(post, 1e3, "divergent candidate was not rejected")
+        self.assertLessEqual(
+            post, pre + 1e-6,
+            "safeguard let the loss increase above the plain optimizer step",
+        )
+
+    def test_safeguard_uses_post_step_baseline(self):
+        # Regression test for the acceptance baseline: a candidate whose loss is
+        # *better than the previous iterate but worse than the plain step* must
+        # be REJECTED. Comparing against the stale pre-step loss (the old bug)
+        # would wrongly accept it.
+        import AADL.anderson_acceleration as anderson_mod
+        from torch.nn.utils import parameters_to_vector
+
+        model = self._fresh_model()
+        opt = torch.optim.SGD(model.parameters(), lr=1e-2)
+        accelerate(
+            opt, acceleration_type="anderson", wait_iterations=1,
+            history_depth=6, frequency=1, store_each_nth=1,
+        )
+        loss_fn = torch.nn.MSELoss()
+        X, y = self.X, self.y.unsqueeze(1)
+
+        def closure():
+            with torch.enable_grad():
+                opt.zero_grad()
+                loss = loss_fn(model(X), y)
+                loss.backward()
+            return loss
+
+        for _ in range(6):
+            opt.step(closure)
+
+        # Candidate = midpoint between the previous iterate (theta_t) and the
+        # plain step (theta_{t+1}); for this convex problem its loss sits
+        # strictly between the two, i.e. worse than the plain step.
+        captured = {}
+
+        def _between(Xhist, *args, **kwargs):
+            plain = Xhist[:, -1].clone()
+            cand = 0.5 * (Xhist[:, -2] + plain)
+            captured["plain"] = plain
+            captured["cand"] = cand.clone()
+            return cand
+
+        original = anderson_mod.get_acceleration
+        anderson_mod.get_acceleration = lambda acc_type: _between
+        try:
+            opt.step(closure)
+        finally:
+            anderson_mod.get_acceleration = original
+
+        final = parameters_to_vector(model.parameters()).detach()
+        # The candidate must be rejected: params equal the plain step, not the
+        # (worse) midpoint candidate.
+        self.assertTrue(
+            torch.allclose(final, captured["plain"], atol=1e-6),
+            "safeguard did not revert to the plain step",
+        )
+        self.assertFalse(
+            torch.allclose(final, captured["cand"], atol=1e-6),
+            "safeguard wrongly accepted a candidate worse than the plain step",
+        )
+
     def test_unknown_acceleration_type_raises(self):
         opt = torch.optim.SGD(self._fresh_model().parameters(), lr=1e-2)
         with self.assertRaises(ValueError):

@@ -127,8 +127,13 @@ def _maybe_sync_acc_param(self, acc_param):
     return acc_param
 
 
-def _safeguard_accept(self, closure, orig_loss):
+def _safeguard_accept(self, closure, base_loss):
     """Decide whether to accept the accelerated step.
+
+    ``base_loss`` must be the loss of the *un-accelerated* iterate that the step
+    would revert to (i.e. the plain optimizer step), so that acceptance is
+    consistent with the fallback: the accelerated step is kept only when it is
+    strictly better than not accelerating.
 
     Returns (accept: bool, acc_loss). When closure is None, the step is
     always accepted (no information available to compare). In distributed
@@ -136,13 +141,13 @@ def _safeguard_accept(self, closure, orig_loss):
     ``acc_vote_threshold``.
     """
     if closure is None:
-        return True, orig_loss
+        return True, base_loss
 
     acc_loss = closure()
     if not self.acc_distributed or _dist_world_size() <= 1:
-        return acc_loss < orig_loss, acc_loss
+        return acc_loss < base_loss, acc_loss
 
-    acc_vote = (acc_loss < orig_loss).float()
+    acc_vote = (acc_loss < base_loss).float()
     torch.distributed.all_reduce(acc_vote, op=torch.distributed.ReduceOp.SUM)
     acc_vote = acc_vote / _dist_world_size()
     return acc_vote.item() > self.acc_vote_threshold, acc_loss
@@ -188,23 +193,34 @@ def _unified_step(self, closure=None):
     if not ready:
         return orig_loss
 
-    final_loss = orig_loss
     accel_fn = anderson.get_acceleration(self.acc_type)
     capacity = self.acc_history_depth
+
+    # Baseline for the safeguard: the loss at the plain (un-accelerated) step,
+    # which is exactly the iterate we revert to if the candidate is rejected.
+    # Evaluating it here (params are still the plain step) keeps acceptance and
+    # fallback consistent. Costs one extra forward eval per acceleration cycle.
+    base_loss = closure() if closure is not None else orig_loss
+    final_loss = base_loss
 
     for group, state in zip(self.param_groups, self.acc_param_hist):
         X = _history_chrono(state, capacity, self.compute_device)
         if X is None:
             continue
 
-        acc_param = accel_fn(X, self.acc_relaxation, self.acc_reg, self.acc_dtype)
+        acc_param = accel_fn(
+            X, self.acc_relaxation, self.acc_reg, self.acc_dtype,
+            equilibrate=self.acc_equilibrate,
+            filter_condition=self.acc_filter_condition,
+            refinement_steps=self.acc_refinement_steps,
+        )
 
         acc_param = _maybe_sync_acc_param(self, acc_param)
 
         # apply candidate acceleration
         vector_to_parameters(acc_param, group['params'])
 
-        accepted, acc_loss = _safeguard_accept(self, closure, orig_loss)
+        accepted, acc_loss = _safeguard_accept(self, closure, base_loss)
 
         last_row = _last_row(state, capacity)
         if accepted:
@@ -251,6 +267,9 @@ def accelerate(
     vote_threshold: float = 0.9,
     debug: bool = False,
     mixing_dtype=None,
+    equilibrate: bool = True,
+    filter_condition: float = 0.0,
+    refinement_steps: int = 0,
 ):
     """Wrap ``optimizer.step`` to apply Anderson-type acceleration.
 
@@ -259,15 +278,17 @@ def accelerate(
     enough history has accumulated -- replaces the parameters with an
     Anderson-accelerated extrapolation.  When a ``closure`` is supplied the
     accelerated step is safeguarded by re-evaluating the loss and reverting
-    if it did not decrease.
+    to the plain optimizer step whenever the accelerated iterate is not
+    strictly better than that plain step.
 
     Notes on ``closure``:
-        Passing a ``closure`` enables the safeguard above but costs one extra
-        forward pass *per accepted acceleration cycle*.  To amortize this,
-        increase ``frequency`` so acceleration (and the extra forward) is
-        attempted only every Nth optimizer step.  When ``closure`` is
-        ``None`` no safeguard is performed and the accelerated step is
-        always accepted.
+        Passing a ``closure`` enables the safeguard above but costs extra
+        forward passes on each acceleration cycle: one to evaluate the plain
+        step (the comparison baseline / revert target) plus one per candidate
+        extrapolation.  To amortize this, increase ``frequency`` so
+        acceleration (and the extra forwards) is attempted only every Nth
+        optimizer step.  When ``closure`` is ``None`` no safeguard is
+        performed and the accelerated step is always accepted.
 
     Parameters
     ----------
@@ -287,6 +308,18 @@ def accelerate(
         parameter dtype. Lower precision speeds up the least-squares solve;
         the extrapolated parameters are always cast back to their original
         dtype before being written to the model.
+    equilibrate : bool
+        Scale the columns of the difference matrix to unit norm before the
+        least-squares solve (improves conditioning; on by default).
+    filter_condition : float
+        If > 0, drop the oldest history columns until the 2-norm condition
+        number of the least-squares matrix falls below this threshold
+        (Walker-Ni filtering). 0 disables filtering.
+    refinement_steps : int
+        Number of mixed-precision iterative-refinement steps applied to the
+        mixing vector (residual formed in the parameter dtype, correction via
+        the reduced-precision factor). Useful together with a low
+        ``mixing_dtype`` to recover accuracy cheaply. 0 disables refinement.
     debug, vote_threshold : runtime-configurable distributed safeguards.
     """
     # validate acceleration type early
@@ -304,6 +337,9 @@ def accelerate(
     optimizer.acc_sync_frequency  = sync_frequency
     optimizer.acc_reg             = reg_acc
     optimizer.acc_dtype           = anderson._resolve_dtype(mixing_dtype)
+    optimizer.acc_equilibrate     = equilibrate
+    optimizer.acc_filter_condition = filter_condition
+    optimizer.acc_refinement_steps = refinement_steps
     optimizer.acc_distributed     = distributed
     optimizer.acc_vote_threshold  = vote_threshold
     optimizer.acc_debug           = debug
@@ -343,6 +379,7 @@ _ACC_ATTRS = (
     "acc_type", "acc_wait_iterations", "acc_relaxation", "acc_history_depth",
     "acc_frequency", "acc_sync_frequency", "acc_store_each_nth", "acc_reg",
     "acc_dtype",
+    "acc_equilibrate", "acc_filter_condition", "acc_refinement_steps",
     "acc_distributed", "acc_vote_threshold", "acc_debug", "acc_average_pre_step",
     "acc_param_hist", "avg_param_hist",
     "acc_call_counter", "acc_store_counter", "acc_sync_counter",
