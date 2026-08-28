@@ -276,6 +276,16 @@ class DeterministicAcceleration(FixedPointIteration):
 
     def set_optimizer(self, optimizer_string):
         super(DeterministicAcceleration, self).set_optimizer(optimizer_string)
-        accelerate.accelerate(self.optimizer, self.acceleration_type, self.relaxation, self.wait_iterations, self.history_depth, self.store_each_nth, self.frequency, self.reg_acc, self.average)
-
+        accelerate.accelerate(
+            self.optimizer,
+            acceleration_type=self.acceleration_type,
+            relaxation=self.relaxation,
+            wait_iterations=self.wait_iterations,
+            history_depth=self.history_depth,
+            store_each_nth=self.store_each_nth,
+            frequency=self.frequency,
+            reg_acc=self.reg_acc,
+            average=self.average,
+            safeguard=self.safeguard,
+        )
 
