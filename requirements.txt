@@ -2,7 +2,6 @@
 # Install with:  pip install -r requirements.txt
 # For the examples/ demos, also install requirements-examples.txt
 #
-# torch>=2.1 is required: the acceleration kernels use
-# torch.linalg.solve_triangular (>=1.11) and torch._foreach_copy_ (>=2.1).
-torch>=2.1
-numpy
+# Keep these floors synchronized with setup.py.
+torch>=2.13
+numpy>=2.0

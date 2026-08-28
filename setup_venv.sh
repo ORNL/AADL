@@ -24,9 +24,9 @@ if ! command -v "$PYTHON" >/dev/null 2>&1; then
     exit 1
 fi
 
-# AADL requires Python >= 3.8 (torch>=2.1 has no wheels for older CPythons).
-if ! "$PYTHON" -c 'import sys; sys.exit(0 if sys.version_info[:2] >= (3, 8) else 1)'; then
-    echo "ERROR: AADL requires Python >= 3.8, but '$PYTHON' is $("$PYTHON" --version 2>&1)." >&2
+# Keep this check synchronized with python_requires in setup.py.
+if ! "$PYTHON" -c 'import sys; sys.exit(0 if sys.version_info[:2] >= (3, 11) else 1)'; then
+    echo "ERROR: AADL requires Python >= 3.11, but '$PYTHON' is $("$PYTHON" --version 2>&1)." >&2
     echo "       Set PYTHON=<interpreter> to a newer Python, e.g. PYTHON=python3.11 ./setup_venv.sh" >&2
     exit 1
 fi

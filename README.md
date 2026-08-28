@@ -4,11 +4,11 @@ AADL is a Python package that implements the Anderson acceleration to speed-up t
 AA is an extrapolation technique that can accelerate fixed-point iterations such those arising from the iterative training of DL models. However, large volume of data are typically processed in sequential random batches which introduces stochastic oscillations in the fixed-point iteration that hinders AA acceleration. AADL implements a moving average that reduces the oscillations and results in a smoother sequence of gradient descent updates which enables the use of AA. AADL uses a criterion to automatically decide if the moving average is needed by monitoring if the relative standard deviation between consecutive stochastic gradient updates exceeds a tolerance defined by the user.
 
 ## Requirements
-Python 3.8 or greater\
-PyTorch (`torch>=2.1`) and NumPy
+Python 3.11 or greater\
+PyTorch (`torch>=2.13`) and NumPy (`numpy>=2.0`)
 
-> `torch>=2.1` is required because the acceleration kernels use
-> `torch.linalg.solve_triangular` and `torch._foreach_copy_`.
+These minimum versions are enforced by the package metadata and
+`requirements.txt`.
 
 ## Installation
 
