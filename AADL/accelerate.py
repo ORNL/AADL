@@ -1,3 +1,4 @@
+import math
 import os
 
 import torch
@@ -107,24 +108,32 @@ def _moving_average_step(self):
     for group, group_hist in zip(self.param_groups, self.avg_param_hist):
         X = torch.stack(list(group_hist), dim=1).to(device=self.compute_device)
         average = torch.mean(X, dim=1)
-        std = torch.std(X, dim=1)
-        if torch.max(std) / torch.max(average) > 0.1:
+        std = torch.std(X, dim=1, correction=0)
+        # Use magnitudes and a finite denominator: a zero or negative mean
+        # should not make the relative-variation test invalid.
+        scale = average.abs().amax().clamp_min(torch.finfo(average.dtype).eps)
+        if std.amax() / scale > 0.1:
             vector_to_parameters(average, group['params'])
 
 
-def _maybe_sync_acc_param(self, acc_param):
-    """All-reduce-mean acc_param across ranks if distributed and time to sync."""
+def _maybe_sync_acc_params(self, acc_params):
+    """All-reduce-mean candidates across ranks when it is time to sync.
+
+    The cadence is counted per optimizer step, rather than once per parameter
+    group, so multi-group and single-group optimizers behave consistently.
+    """
     if not self.acc_distributed:
-        return acc_param
+        return acc_params
     world_size = _dist_world_size()
     if world_size <= 1:
-        return acc_param
+        return acc_params
     self.acc_sync_counter += 1
     if self.acc_sync_counter % self.acc_sync_frequency == 0:
         self.acc_sync_counter = 0
-        torch.distributed.all_reduce(acc_param, op=torch.distributed.ReduceOp.SUM)
-        acc_param = acc_param / world_size
-    return acc_param
+        for acc_param in acc_params:
+            torch.distributed.all_reduce(acc_param, op=torch.distributed.ReduceOp.SUM)
+            acc_param.div_(world_size)
+    return acc_params
 
 
 def _safeguard_accept(self, closure, base_loss):
@@ -140,7 +149,7 @@ def _safeguard_accept(self, closure, base_loss):
     mode, ranks vote and accept when the fraction agreeing exceeds
     ``acc_vote_threshold``.
     """
-    if closure is None:
+    if closure is None or not getattr(self, "acc_safeguard", True):
         return True, base_loss
 
     acc_loss = closure()
@@ -200,40 +209,52 @@ def _unified_step(self, closure=None):
     # which is exactly the iterate we revert to if the candidate is rejected.
     # Evaluating it here (params are still the plain step) keeps acceptance and
     # fallback consistent. Costs one extra forward eval per acceleration cycle.
-    base_loss = closure() if closure is not None else orig_loss
-    final_loss = base_loss
-
+    safeguard_closure = closure if self.acc_safeguard else None
+    base_loss = safeguard_closure() if safeguard_closure is not None else orig_loss
+    candidates = []
     for group, state in zip(self.param_groups, self.acc_param_hist):
         X = _history_chrono(state, capacity, self.compute_device)
         if X is None:
             continue
-
         acc_param = accel_fn(
             X, self.acc_relaxation, self.acc_reg, self.acc_dtype,
             equilibrate=self.acc_equilibrate,
             filter_condition=self.acc_filter_condition,
             refinement_steps=self.acc_refinement_steps,
         )
+        candidates.append((group, state, acc_param))
 
-        acc_param = _maybe_sync_acc_param(self, acc_param)
+    if not candidates:
+        return base_loss
 
-        # apply candidate acceleration
+    synced = _maybe_sync_acc_params(self, [item[2] for item in candidates])
+    candidates = [
+        (group, state, acc_param)
+        for (group, state, _), acc_param in zip(candidates, synced)
+    ]
+
+    # Apply every group before evaluating the candidate. Acceptance must be an
+    # optimizer-wide transaction; evaluating groups one at a time makes the
+    # result depend on parameter-group ordering and can leave a hybrid state.
+    for group, _, acc_param in candidates:
         vector_to_parameters(acc_param, group['params'])
 
-        accepted, acc_loss = _safeguard_accept(self, closure, base_loss)
+    accepted, acc_loss = _safeguard_accept(self, safeguard_closure, base_loss)
 
+    for group, state, acc_param in candidates:
         last_row = _last_row(state, capacity)
+        if self.acc_debug:
+            baseline = last_row.clone()
         if accepted:
-            # overwrite most-recent history slot in place
             last_row.copy_(acc_param)
-            final_loss = acc_loss
         else:
-            # revert to the non-accelerated parameters
             buffer_row_to_parameters_(last_row, group['params'])
+        if self.acc_debug:
+            _debug_log_divergence(
+                self, baseline, acc_param, closure is not None, accepted
+            )
 
-        _debug_log_divergence(self, last_row, acc_param, closure is not None, accepted)
-
-    return final_loss
+    return acc_loss if accepted else base_loss
 
 
 # ---------------------------------------------------------------------------
@@ -270,6 +291,7 @@ def accelerate(
     equilibrate: bool = True,
     filter_condition: float = 0.0,
     refinement_steps: int = 0,
+    safeguard: bool = True,
 ):
     """Wrap ``optimizer.step`` to apply Anderson-type acceleration.
 
@@ -320,8 +342,50 @@ def accelerate(
         mixing vector (residual formed in the parameter dtype, correction via
         the reduced-precision factor). Useful together with a low
         ``mixing_dtype`` to recover accuracy cheaply. 0 disables refinement.
+    safeguard : bool
+        When true, a supplied closure is used to accept the optimizer-wide
+        accelerated candidate only if it improves on the plain optimizer step.
     debug, vote_threshold : runtime-configurable distributed safeguards.
     """
+    if hasattr(optimizer, "acc_type"):
+        raise ValueError(
+            "optimizer is already wrapped by AADL; call remove_acceleration() "
+            "before wrapping it again"
+        )
+
+    def _positive_int(name, value):
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise ValueError(f"{name} must be a positive integer, got {value!r}")
+
+    _positive_int("history_depth", history_depth)
+    _positive_int("store_each_nth", store_each_nth)
+    _positive_int("frequency", frequency)
+    _positive_int("sync_frequency", sync_frequency)
+    if (isinstance(wait_iterations, bool)
+            or not isinstance(wait_iterations, int)
+            or wait_iterations < 0):
+        raise ValueError("wait_iterations must be a non-negative integer")
+    if (not isinstance(relaxation, (int, float))
+            or isinstance(relaxation, bool)
+            or not math.isfinite(relaxation)
+            or not 0.0 < relaxation <= 1.0):
+        raise ValueError("relaxation must be in (0, 1]")
+    if not isinstance(reg_acc, (int, float)) or not math.isfinite(reg_acc) or reg_acc < 0.0:
+        raise ValueError("reg_acc must be non-negative")
+    if (not isinstance(filter_condition, (int, float))
+            or not math.isfinite(filter_condition)
+            or filter_condition < 0.0):
+        raise ValueError("filter_condition must be non-negative")
+    if (isinstance(refinement_steps, bool)
+            or not isinstance(refinement_steps, int)
+            or refinement_steps < 0):
+        raise ValueError("refinement_steps must be a non-negative integer")
+    if (not isinstance(vote_threshold, (int, float))
+            or isinstance(vote_threshold, bool)
+            or not math.isfinite(vote_threshold)
+            or not 0.0 <= vote_threshold <= 1.0):
+        raise ValueError("vote_threshold must be in [0, 1]")
+
     # validate acceleration type early
     acc_type = acceleration_type.lower()
     if acc_type != "identity":
@@ -343,6 +407,7 @@ def accelerate(
     optimizer.acc_distributed     = distributed
     optimizer.acc_vote_threshold  = vote_threshold
     optimizer.acc_debug           = debug
+    optimizer.acc_safeguard       = safeguard
     optimizer.acc_average_pre_step = average and acc_type != "identity"
 
     # acceleration history: ring buffer per param group, lazily allocated
@@ -380,7 +445,8 @@ _ACC_ATTRS = (
     "acc_frequency", "acc_sync_frequency", "acc_store_each_nth", "acc_reg",
     "acc_dtype",
     "acc_equilibrate", "acc_filter_condition", "acc_refinement_steps",
-    "acc_distributed", "acc_vote_threshold", "acc_debug", "acc_average_pre_step",
+    "acc_distributed", "acc_vote_threshold", "acc_debug", "acc_safeguard",
+    "acc_average_pre_step",
     "acc_param_hist", "avg_param_hist",
     "acc_call_counter", "acc_store_counter", "acc_sync_counter",
     "orig_step", "history_device", "compute_device",

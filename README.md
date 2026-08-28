@@ -80,7 +80,18 @@ safeguard = True
 average = True
 
 # Over-writing of the torch.optim.step() method 
-AADL.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc, average)
+AADL.accelerate(
+    optimizer,
+    acceleration_type="anderson",
+    relaxation=relaxation,
+    wait_iterations=wait_iterations,
+    history_depth=history_depth,
+    store_each_nth=store_each_nth,
+    frequency=frequency,
+    reg_acc=reg_acc,
+    average=average,
+    safeguard=safeguard,
+)
 
 ```
 
@@ -111,4 +122,3 @@ M. Lupo Pasini, V. Reshniak, and M. K. Stoyanov. AADL: Anderson Accelerated Deep
 
 ### Publications
 M. Lupo Pasini, J. Yin, V. Reshniak and M. K. Stoyanov, "Anderson Acceleration for Distributed Training of Deep Learning Models," SoutheastCon 2022, 2022, pp. 289-295, doi: 10.1109/SoutheastCon48659.2022.9763953.
-

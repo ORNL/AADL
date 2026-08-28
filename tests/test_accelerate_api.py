@@ -313,6 +313,67 @@ class TestAccelerateAPI(unittest.TestCase):
         accelerate(opt, acceleration_type="identity", average=False)
         self.assertIs(opt.step.__func__, original_step_func)
 
+    def test_invalid_configuration_and_double_wrap_raise(self):
+        invalid = (
+            {"history_depth": 0}, {"store_each_nth": 0}, {"frequency": 0},
+            {"sync_frequency": 0}, {"wait_iterations": -1},
+            {"relaxation": 0.0}, {"relaxation": 1.1}, {"reg_acc": -1.0},
+            {"filter_condition": -1.0}, {"refinement_steps": -1},
+            {"vote_threshold": 1.1},
+        )
+        for kwargs in invalid:
+            opt = torch.optim.SGD(self._fresh_model().parameters(), lr=1e-2)
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                accelerate(opt, acceleration_type="anderson", **kwargs)
+
+        opt = torch.optim.SGD(self._fresh_model().parameters(), lr=1e-2)
+        accelerate(opt, acceleration_type="anderson")
+        with self.assertRaisesRegex(ValueError, "already wrapped"):
+            accelerate(opt, acceleration_type="anderson")
+
+    def test_multigroup_safeguard_is_atomic(self):
+        import AADL.anderson_acceleration as anderson_mod
+
+        p1 = torch.nn.Parameter(torch.tensor([2.0]))
+        p2 = torch.nn.Parameter(torch.tensor([2.0]))
+        opt = torch.optim.SGD([{"params": [p1]}, {"params": [p2]}], lr=0.1)
+        accelerate(
+            opt, acceleration_type="anderson", wait_iterations=0,
+            history_depth=4, frequency=1, store_each_nth=1,
+        )
+
+        def closure():
+            with torch.enable_grad():
+                opt.zero_grad()
+                loss = p1.square().sum() + p2.square().sum()
+                loss.backward()
+            return loss
+
+        # Three entries are required before an acceleration attempt.
+        for _ in range(2):
+            opt.step(closure)
+
+        calls = []
+        plain = []
+
+        def _mixed_candidate(Xhist, *args, **kwargs):
+            plain.append(Xhist[:, -1].clone())
+            value = 0.0 if not calls else 1e6
+            calls.append(value)
+            return torch.full_like(Xhist[:, -1], value)
+
+        original = anderson_mod.get_acceleration
+        anderson_mod.get_acceleration = lambda acc_type: _mixed_candidate
+        try:
+            opt.step(closure)
+        finally:
+            anderson_mod.get_acceleration = original
+
+        # The second group's divergent candidate rejects the optimizer-wide
+        # transaction, including the individually beneficial first candidate.
+        self.assertTrue(torch.allclose(p1.detach(), plain[0]))
+        self.assertTrue(torch.allclose(p2.detach(), plain[1]))
+
     def test_closure_none_disables_safeguard(self):
         # With no closure there is no loss to compare against, so the safeguard
         # is skipped and the accelerated candidate is accepted unconditionally.
