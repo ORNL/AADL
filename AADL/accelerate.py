@@ -183,7 +183,7 @@ def _unified_step(self, closure=None):
     for group, state, acc_param in candidates:
         last_row = _last_row(state, capacity)
         if accepted:
-            last_row.copy_(acc_param)
+            last_row.copy_(acc_param.to(device=last_row.device))
         else:
             buffer_row_to_parameters_(last_row, group['params'])
 
