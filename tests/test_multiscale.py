@@ -41,8 +41,7 @@ def test_multiscale_paraboloid_anderson(dim=100, condition_number=1.0e3,
     batch_size = dim
     acceleration_type = "anderson"
     use_bias = True
-    weight_decay = 0.0
-    threshold = 1e-8
+    weight_decay = w_decay
     wait_iterations = 1
     reg_acc = 1e-7
     store_each_nth = frequency
