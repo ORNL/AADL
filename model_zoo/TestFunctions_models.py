@@ -17,13 +17,15 @@ class Paraboloid(torch.nn.Module):
 
         self.device = device
 
-        # A is orthogonal matrix
-        A, _ = torch.qr( torch.rand(dim,dim) )
+        # Scale the singular values so the quadratic loss Hessian has the
+        # requested condition number (the Hessian contains A.T @ A).
+        generator = torch.Generator().manual_seed(0)
+        A, _ = torch.linalg.qr(torch.rand(dim, dim, generator=generator))
         for i in range(dim):
-            A[i,:] *= condition_number**(i/dim)
+            A[i, :] *= condition_number**(i / (2 * max(dim - 1, 1)))
         self.register_buffer('A', A)
 
-        self.weight = torch.nn.Parameter(torch.rand(dim))
+        self.weight = torch.nn.Parameter(torch.rand(dim, generator=generator))
 
     def forward(self, x):
         return torch.mv(self.A, self.weight)

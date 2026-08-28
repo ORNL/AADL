@@ -113,12 +113,13 @@ def neural_network_linear_regression_anderson(slope, intercept, num_points, opti
     frequency = 1
     reg_acc = 1e-9
     store_each_nth = 1
+    safeguard = True
 
     training_dataloader = torch.utils.data.DataLoader(dataset, batch_size)
     validation_dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
     model = MLP(inputDim,outputDim,num_neurons_list,use_bias,activation,classification_problem)
-    optimizer_anderson = DeterministicAcceleration(training_dataloader,validation_dataloader,'anderson',learning_rate,relaxation,weight_decay,wait_iterations,history_depth,frequency,reg_acc,store_each_nth)
+    optimizer_anderson = DeterministicAcceleration(training_dataloader,validation_dataloader,'anderson',learning_rate,relaxation,weight_decay,wait_iterations,history_depth,frequency,reg_acc,store_each_nth,False,safeguard)
     optimizer_anderson.import_model(model)
     optimizer_anderson.set_loss_function('mse')
     optimizer_anderson.set_optimizer(optimizer_str)

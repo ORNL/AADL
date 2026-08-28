@@ -70,7 +70,7 @@ def linear_data(slope, intercept, num_points: int = 10):
 def linear_regression(slope, intercept, num_points, optimizer_str):
     input_dim, output_dim, dataset = linear_data(slope, intercept, num_points)
     use_bias = True
-    learning_rate = 0.01
+    learning_rate = 0.001
     weight_decay = 0.0
     batch_size = 1
     epochs = 1000
@@ -95,7 +95,7 @@ def linear_regression_anderson(slope, intercept, num_points, optimizer_str):
     input_dim, output_dim, dataset = linear_data(slope, intercept, num_points)
     acceleration_type = "anderson"
     use_bias = True
-    learning_rate = 0.01
+    learning_rate = 0.001
     relaxation = 1.0
     weight_decay = 0.0
     batch_size = 1
@@ -107,13 +107,14 @@ def linear_regression_anderson(slope, intercept, num_points, optimizer_str):
     reg_acc = 1e-9
     store_each_nth = frequency
     average = True
+    safeguard = True
 
     training_dataloader = torch.utils.data.DataLoader(dataset, batch_size)
     validation_dataloader = torch.utils.data.DataLoader(dataset, batch_size)
 
     model = LinearRegression(input_dim, output_dim, use_bias)
     optimizer_anderson = DeterministicAcceleration(training_dataloader,validation_dataloader,acceleration_type,learning_rate,relaxation,weight_decay,wait_iterations,history_depth,
-        frequency,reg_acc,store_each_nth, average)
+        frequency,reg_acc,store_each_nth, average, safeguard)
     optimizer_anderson.import_model(model)
     optimizer_anderson.set_loss_function('mse')
     optimizer_anderson.set_optimizer(optimizer_str)
