@@ -1,5 +1,4 @@
 import math
-import os
 
 import torch
 
@@ -14,22 +13,6 @@ from collections import deque
 from types import MethodType
 
 import AADL.anderson_acceleration as anderson
-
-
-def _dist_world_size():
-    if torch.distributed.is_available() and torch.distributed.is_initialized():
-        return torch.distributed.get_world_size()
-    if "WORLD_SIZE" in os.environ:
-        return int(os.environ["WORLD_SIZE"])
-    return 1
-
-
-def _dist_local_rank():
-    if torch.distributed.is_available() and torch.distributed.is_initialized():
-        return torch.distributed.get_rank()
-    if "LOCAL_RANK" in os.environ:
-        return int(os.environ["LOCAL_RANK"])
-    return 0
 
 
 def _ensure_buffer(self, state, params):
@@ -116,26 +99,6 @@ def _moving_average_step(self):
             vector_to_parameters(average, group['params'])
 
 
-def _maybe_sync_acc_params(self, acc_params):
-    """All-reduce-mean candidates across ranks when it is time to sync.
-
-    The cadence is counted per optimizer step, rather than once per parameter
-    group, so multi-group and single-group optimizers behave consistently.
-    """
-    if not self.acc_distributed:
-        return acc_params
-    world_size = _dist_world_size()
-    if world_size <= 1:
-        return acc_params
-    self.acc_sync_counter += 1
-    if self.acc_sync_counter % self.acc_sync_frequency == 0:
-        self.acc_sync_counter = 0
-        for acc_param in acc_params:
-            torch.distributed.all_reduce(acc_param, op=torch.distributed.ReduceOp.SUM)
-            acc_param.div_(world_size)
-    return acc_params
-
-
 def _safeguard_accept(self, closure, base_loss):
     """Decide whether to accept the accelerated step.
 
@@ -145,52 +108,24 @@ def _safeguard_accept(self, closure, base_loss):
     strictly better than not accelerating.
 
     Returns (accept: bool, acc_loss). When closure is None, the step is
-    always accepted (no information available to compare). In distributed
-    mode, ranks vote and accept when the fraction agreeing exceeds
-    ``acc_vote_threshold``.
+    always accepted (no information available to compare).
     """
     if closure is None or not getattr(self, "acc_safeguard", True):
         return True, base_loss
 
     acc_loss = closure()
-    if not self.acc_distributed or _dist_world_size() <= 1:
-        return acc_loss < base_loss, acc_loss
-
-    acc_vote = (acc_loss < base_loss).float()
-    torch.distributed.all_reduce(acc_vote, op=torch.distributed.ReduceOp.SUM)
-    acc_vote = acc_vote / _dist_world_size()
-    return acc_vote.item() > self.acc_vote_threshold, acc_loss
-
-
-def _debug_log_divergence(self, last_param, acc_param, closure_used, accepted):
-    if not self.acc_debug:
-        return
-    if not (self.acc_distributed and _dist_world_size() > 1):
-        return
-    rank = _dist_local_rank()
-    world_size = _dist_world_size()
-    history_list = [torch.zeros_like(last_param) for _ in range(world_size)] if rank == 0 else None
-    acc_param_list = [torch.zeros_like(acc_param) for _ in range(world_size)] if rank == 0 else None
-    torch.distributed.gather(last_param, gather_list=history_list, dst=0)
-    torch.distributed.gather(acc_param, gather_list=acc_param_list, dst=0)
-    if rank == 0:
-        diff_history = sum((h - history_list[0]) for h in history_list)
-        diff_param = sum((p - acc_param_list[0]) for p in acc_param_list)
-        print(
-            f"rel_history diff: {diff_history.abs().max().item() / history_list[0].abs().max().item():.2e}, "
-            f"rel_acc_diff: {diff_param.abs().max().item() / acc_param_list[0].abs().max().item():.2e}, "
-            f"accepted: {accepted}"
-        )
+    return acc_loss < base_loss, acc_loss
 
 
 @torch.no_grad()
 def _unified_step(self, closure=None):
-    """Single step implementation covering plain, distributed, and averaged variants."""
+    """Apply the underlying optimizer step and optional local acceleration."""
     if self.acc_average_pre_step:
         # moving-average sweep before the underlying optimizer step
         _moving_average_step(self)
 
     orig_loss = self.orig_step(closure)
+    self.acc_last_plain = None
 
     _store_current_params(self)
 
@@ -227,10 +162,14 @@ def _unified_step(self, closure=None):
     if not candidates:
         return base_loss
 
-    synced = _maybe_sync_acc_params(self, [item[2] for item in candidates])
-    candidates = [
-        (group, state, acc_param)
-        for (group, state, _), acc_param in zip(candidates, synced)
+    # Retain the local plain iterate for an optional native model-averaging
+    # boundary comparison. Only parameters participating in this backward pass
+    # are included, matching PyTorch's model-averaging filter.
+    self.acc_last_plain = [
+        (param, param.detach().clone())
+        for group, _, _ in candidates
+        for param in group["params"]
+        if param.grad is not None
     ]
 
     # Apply every group before evaluating the candidate. Acceptance must be an
@@ -243,16 +182,10 @@ def _unified_step(self, closure=None):
 
     for group, state, acc_param in candidates:
         last_row = _last_row(state, capacity)
-        if self.acc_debug:
-            baseline = last_row.clone()
         if accepted:
             last_row.copy_(acc_param)
         else:
             buffer_row_to_parameters_(last_row, group['params'])
-        if self.acc_debug:
-            _debug_log_divergence(
-                self, baseline, acc_param, closure is not None, accepted
-            )
 
     return acc_loss if accepted else base_loss
 
@@ -261,7 +194,6 @@ def _unified_step(self, closure=None):
 # Backwards-compatible aliases so external code importing the old function
 # names keeps working.
 accelerated_step = _unified_step
-distributed_accelerated_step = _unified_step
 averaged_accelerated_step = _unified_step
 
 
@@ -283,10 +215,6 @@ def accelerate(
     average: bool = False,
     history_device: str = "cpu",
     compute_device: str = "cpu",
-    distributed: bool = False,
-    sync_frequency: int = 1,
-    vote_threshold: float = 0.9,
-    debug: bool = False,
     mixing_dtype=None,
     equilibrate: bool = True,
     filter_condition: float = 0.0,
@@ -345,7 +273,6 @@ def accelerate(
     safeguard : bool
         When true, a supplied closure is used to accept the optimizer-wide
         accelerated candidate only if it improves on the plain optimizer step.
-    debug, vote_threshold : runtime-configurable distributed safeguards.
     """
     if hasattr(optimizer, "acc_type"):
         raise ValueError(
@@ -360,7 +287,6 @@ def accelerate(
     _positive_int("history_depth", history_depth)
     _positive_int("store_each_nth", store_each_nth)
     _positive_int("frequency", frequency)
-    _positive_int("sync_frequency", sync_frequency)
     if (isinstance(wait_iterations, bool)
             or not isinstance(wait_iterations, int)
             or wait_iterations < 0):
@@ -380,12 +306,6 @@ def accelerate(
             or not isinstance(refinement_steps, int)
             or refinement_steps < 0):
         raise ValueError("refinement_steps must be a non-negative integer")
-    if (not isinstance(vote_threshold, (int, float))
-            or isinstance(vote_threshold, bool)
-            or not math.isfinite(vote_threshold)
-            or not 0.0 <= vote_threshold <= 1.0):
-        raise ValueError("vote_threshold must be in [0, 1]")
-
     # validate acceleration type early
     acc_type = acceleration_type.lower()
     if acc_type != "identity":
@@ -398,15 +318,11 @@ def accelerate(
     optimizer.acc_history_depth   = history_depth
     optimizer.acc_store_each_nth  = store_each_nth
     optimizer.acc_frequency       = frequency
-    optimizer.acc_sync_frequency  = sync_frequency
     optimizer.acc_reg             = reg_acc
     optimizer.acc_dtype           = anderson._resolve_dtype(mixing_dtype)
     optimizer.acc_equilibrate     = equilibrate
     optimizer.acc_filter_condition = filter_condition
     optimizer.acc_refinement_steps = refinement_steps
-    optimizer.acc_distributed     = distributed
-    optimizer.acc_vote_threshold  = vote_threshold
-    optimizer.acc_debug           = debug
     optimizer.acc_safeguard       = safeguard
     optimizer.acc_average_pre_step = average and acc_type != "identity"
 
@@ -419,7 +335,7 @@ def accelerate(
 
     optimizer.acc_call_counter  = 0
     optimizer.acc_store_counter = 0
-    optimizer.acc_sync_counter  = 0
+    optimizer.acc_last_plain = None
 
     optimizer.history_device = history_device
     optimizer.compute_device = compute_device
@@ -436,21 +352,36 @@ def accelerate(
     return optimizer
 
 
-def distributed_accelerate(optimizer, **kwargs):
-    return accelerate(optimizer, **kwargs, distributed=True)
-
-
 _ACC_ATTRS = (
     "acc_type", "acc_wait_iterations", "acc_relaxation", "acc_history_depth",
-    "acc_frequency", "acc_sync_frequency", "acc_store_each_nth", "acc_reg",
+    "acc_frequency", "acc_store_each_nth", "acc_reg",
     "acc_dtype",
     "acc_equilibrate", "acc_filter_condition", "acc_refinement_steps",
-    "acc_distributed", "acc_vote_threshold", "acc_debug", "acc_safeguard",
+    "acc_safeguard",
     "acc_average_pre_step",
     "acc_param_hist", "avg_param_hist",
-    "acc_call_counter", "acc_store_counter", "acc_sync_counter",
+    "acc_call_counter", "acc_store_counter",
+    "acc_last_plain",
     "orig_step", "history_device", "compute_device",
 )
+
+
+def reset_acceleration_history(optimizer):
+    """Discard history after an external operation changes model parameters.
+
+    Call this after native PyTorch model averaging (for example,
+    ``PeriodicModelAverager.average_parameters``) so subsequent Anderson
+    extrapolations do not mix pre- and post-consensus trajectories.
+    """
+    if not hasattr(optimizer, "acc_param_hist"):
+        raise ValueError("optimizer is not wrapped by AADL")
+    for state in optimizer.acc_param_hist:
+        state["buf"] = None
+        state["count"] = 0
+    for history in optimizer.avg_param_hist:
+        history.clear()
+    optimizer.acc_store_counter = 0
+    return optimizer
 
 
 def remove_acceleration(optimizer):

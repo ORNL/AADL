@@ -279,7 +279,18 @@ safeguard = True
 
 optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr*int(math.sqrt(world_size)), momentum=0.9, weight_decay=5e-4)
 #scheduler_anderson = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_anderson, T_max=200)
-accelerate.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc, average, safeguard)
+accelerate.accelerate(
+    optimizer_anderson,
+    acceleration_type="anderson",
+    relaxation=relaxation,
+    wait_iterations=wait_iterations,
+    history_depth=history_depth,
+    store_each_nth=store_each_nth,
+    frequency=frequency,
+    reg_acc=reg_acc,
+    average=average,
+    safeguard=safeguard,
+)
 
 optimization_classic = Optimization(net_classic, trainloader, testloader, optimizer_classic, False, 200)
 optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, safeguard, 200)

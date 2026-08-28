@@ -107,7 +107,60 @@ AADL.accelerate(
 ```filter_condition```: Float (default ``0.0``, disabled). If greater than ``0``, oldest history columns are dropped (Walker-Ni filtering) until the 2-norm condition number of the least-squares matrix falls below this threshold. The condition number is estimated cheaply from the small Gram matrix. Use it to stabilize the solve when the history becomes nearly rank-deficient\
 ```refinement_steps```: Integer (default ``0``, disabled). Number of mixed-precision iterative-refinement steps applied to the mixing vector: the residual is formed in the parameter precision while the correction reuses the reduced-precision factor, recovering accuracy cheaply when ``mixing_dtype`` is lower than the parameter dtype. A monotone guard rejects any non-improving step, so refinement never diverges on ill-conditioned systems (it becomes a no-op instead)\
 ```safeguard```: Boolean. If set to True, the Anderson step is kept only when it strictly reduces the loss relative to the plain optimizer step it would otherwise revert to (the comparison uses the post-step loss, so a candidate that is worse than not accelerating is rejected). Non-finite (``NaN``/``Inf``) candidates from a degenerate solve are also rejected. Requires passing a ``closure`` to ``optimizer.step``; with no closure the safeguard is disabled and the accelerated step is always accepted\
-```average```: Boolean. If set to True, a movign average is applied to the history window before computing the Anderson step\ 
+```average```: Boolean. If set to True, a moving average is applied to the history window before computing the Anderson step.
+
+## Distributed training
+
+AADL does not implement gradient or parameter synchronization. Compose it with
+PyTorch's native Post-LocalSGD components:
+
+```python
+from torch.distributed.algorithms.ddp_comm_hooks.post_localSGD_hook import (
+    PostLocalSGDState,
+    post_localSGD_hook,
+)
+from AADL import HistoryResetPeriodicModelAverager, average_and_accept
+
+state = PostLocalSGDState(start_localSGD_iter=100)
+ddp_model.register_comm_hook(state, post_localSGD_hook)
+
+local_optimizer = torch.optim.SGD(ddp_model.parameters(), lr=1e-2)
+AADL.accelerate(
+    local_optimizer,
+    acceleration_type="anderson",
+    safeguard=False,  # acceptance is decided globally below
+)
+
+averager = HistoryResetPeriodicModelAverager(
+    local_optimizer, period=4, warmup_steps=100,
+)
+# In the training loop, use a closure for the two global loss evaluations:
+local_optimizer.step(closure)
+average_and_accept(
+    local_optimizer,
+    averager,
+    closure,
+    policy="vote",            # or "mean_loss"
+    vote_threshold=0.5,
+    loss_weight=local_batch_size,
+)
+```
+
+`HistoryResetPeriodicModelAverager` delegates averaging to PyTorch's
+`PeriodicModelAverager`; it only clears stale Anderson history after a native
+averaging boundary.
+
+The safeguard provides three acceptance policies:
+
+- `local`: no communication; each rank evaluates its local candidate.
+- `vote`: accept when at least `vote_threshold` of ranks improve.
+- `mean_loss`: accept when the sample-weighted global loss difference improves;
+  set each rank's `loss_weight` to its local sample count.
+
+`average_and_accept` uses PyTorch's native averaging implementation for both
+the plain and Anderson branches before evaluating them, so every rank votes on
+the same two global parameter vectors. AADL reduces only scalar acceptance
+statistics.
 
 
 ## Contributing

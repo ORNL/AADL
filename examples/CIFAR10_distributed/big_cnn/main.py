@@ -14,6 +14,10 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
+from torch.distributed.algorithms.ddp_comm_hooks.post_localSGD_hook import (
+    PostLocalSGDState,
+    post_localSGD_hook,
+)
 
 import torchvision
 import torchvision.transforms as transforms
@@ -62,7 +66,7 @@ from vgg import *
 
 class Optimization:
     
-    def __init__(self, network: torch.nn.Module, trainloader: torch.utils.data.DataLoader, testloader: torch.utils.data.DataLoader, optimizer: torch.optim, safeguard: bool, num_epochs: int):
+    def __init__(self, network: torch.nn.Module, trainloader: torch.utils.data.DataLoader, testloader: torch.utils.data.DataLoader, optimizer: torch.optim, safeguard: bool, num_epochs: int, averager=None, acceptance_policy="vote"):
         
         self.trainloader = trainloader
         self.testloader = testloader
@@ -70,6 +74,8 @@ class Optimization:
         self.optimizer = optimizer
         self.safeguard = safeguard        
         self.num_epochs = num_epochs
+        self.averager = averager
+        self.acceptance_policy = acceptance_policy
         self.training_loss_history = []
         self.training_accuracy_history = []
         self.validation_loss_history = []
@@ -125,6 +131,15 @@ class Optimization:
                     loss.backward()
                 return loss
             loss = self.optimizer.step(closure)
+            if self.averager is not None:
+                accelerate.average_and_accept(
+                    self.optimizer,
+                    self.averager,
+                    closure,
+                    policy=self.acceptance_policy,
+                    vote_threshold=0.5,
+                    loss_weight=targets.size(0),
+                )
 
             with torch.no_grad():
                 outputs = self.network.forward(inputs)
@@ -246,6 +261,16 @@ if args.checkpoint:
 net_classic  = nn.parallel.DistributedDataParallel(net_classic)
 net_anderson = nn.parallel.DistributedDataParallel(net_anderson)
 
+# PyTorch owns the LocalSGD gradient communication schedule.
+local_sgd_warmup_steps = 0
+local_sgd_period = 4
+post_local_state = PostLocalSGDState(
+    process_group=None,
+    subgroup=None,
+    start_localSGD_iter=local_sgd_warmup_steps,
+)
+net_anderson.register_comm_hook(post_local_state, post_localSGD_hook)
+
 criterion = nn.CrossEntropyLoss()
 optimizer_classic = optim.SGD(net_classic.parameters(), lr=args.lr*int(math.sqrt(world_size)), momentum=0.9, weight_decay=5e-4)
 #scheduler_classic = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_classic, T_max=200)
@@ -253,21 +278,34 @@ optimizer_classic = optim.SGD(net_classic.parameters(), lr=args.lr*int(math.sqrt
 # Parameters for Anderson acceleration
 safeguard = True
 
-optimizer_anderson= optim.SGD(net_anderson.parameters(), lr=args.lr*int(math.sqrt(world_size)), momentum=0.9, weight_decay=5e-4)
+local_optimizer_anderson = optim.SGD(net_anderson.parameters(), lr=args.lr*int(math.sqrt(world_size)), momentum=0.9, weight_decay=5e-4)
 #scheduler_anderson = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_anderson, T_max=200)
-accelerate.distributed_accelerate(optimizer_anderson,
+accelerate.accelerate(local_optimizer_anderson,
     acceleration_type="anderson",
     relaxation=0.1,
     wait_iterations=0,
     history_depth=5,
     store_each_nth=1,
     frequency=1,
-    sync_frequency=1,
     reg_acc=1.e-8,
-    average=False)
+    average=False,
+    safeguard=False)
+
+# PyTorch owns periodic global parameter averaging. AADL only clears history
+# after a native averaging boundary changes the model parameters.
+averager = accelerate.HistoryResetPeriodicModelAverager(
+    local_optimizer_anderson,
+    period=local_sgd_period,
+    warmup_steps=local_sgd_warmup_steps,
+)
+optimizer_anderson = local_optimizer_anderson
 
 optimization_classic  = Optimization(net_classic,  trainloader, testloader, optimizer_classic,  False,     20)
-optimization_anderson = Optimization(net_anderson, trainloader, testloader, optimizer_anderson, safeguard, 20)
+optimization_anderson = Optimization(
+    net_anderson, trainloader, testloader, optimizer_anderson, safeguard, 20,
+    averager=averager,
+    acceptance_policy="vote",  # alternatively: "mean_loss"
+)
 
 
 loss_classic,  accuracy_classic,  validation_loss_classic,  validation_accuracy_classic  = optimization_classic.train()
