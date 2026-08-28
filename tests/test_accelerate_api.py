@@ -14,7 +14,7 @@ import unittest
 
 import torch
 
-from AADL import accelerate, remove_acceleration
+from AADL import accelerate, remove_acceleration, reset_acceleration_history
 
 
 def _free_port():
@@ -26,11 +26,7 @@ def _free_port():
     return port
 
 
-def _vote_worker(rank, world_size, port, threshold, result_queue):
-    """Run ``_safeguard_accept`` inside a gloo process group and report the
-    (all-reduced) accept decision. Rank 0 votes to accept, all others reject,
-    so the accepting fraction is ``1 / world_size``.
-    """
+def _acceptance_worker(rank, world_size, port, policy, result_queue):
     import os
     import torch.distributed as dist
 
@@ -38,18 +34,15 @@ def _vote_worker(rank, world_size, port, threshold, result_queue):
     os.environ["MASTER_PORT"] = str(port)
     dist.init_process_group("gloo", rank=rank, world_size=world_size)
     try:
-        from AADL.accelerate import _safeguard_accept
+        from AADL.distributed import accept_candidate
 
-        class _Dummy:
-            pass
-
-        self = _Dummy()
-        self.acc_distributed = True
-        self.acc_vote_threshold = threshold
-
-        base_loss = torch.tensor(1.0)
-        acc_loss = torch.tensor(0.0 if rank == 0 else 2.0)  # rank 0 improves
-        accepted, _ = _safeguard_accept(self, lambda: acc_loss, base_loss)
+        base_loss = torch.tensor(2.0)
+        # One vote improves and one regresses. For mean_loss, the improvement
+        # is larger than the regression, so the global weighted delta improves.
+        acc_loss = torch.tensor(0.0 if rank == 0 else 3.0)
+        accepted = accept_candidate(
+            acc_loss, base_loss, policy=policy, vote_threshold=0.5,
+        )
         result_queue.put((rank, bool(accepted)))
     finally:
         dist.destroy_process_group()
@@ -313,6 +306,90 @@ class TestAccelerateAPI(unittest.TestCase):
         accelerate(opt, acceleration_type="identity", average=False)
         self.assertIs(opt.step.__func__, original_step_func)
 
+    def test_invalid_configuration_and_double_wrap_raise(self):
+        invalid = (
+            {"history_depth": 0}, {"store_each_nth": 0}, {"frequency": 0},
+            {"wait_iterations": -1},
+            {"relaxation": 0.0}, {"relaxation": 1.1}, {"reg_acc": -1.0},
+            {"reg_acc": True}, {"filter_condition": -1.0},
+            {"filter_condition": True}, {"refinement_steps": -1},
+        )
+        for kwargs in invalid:
+            opt = torch.optim.SGD(self._fresh_model().parameters(), lr=1e-2)
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                accelerate(opt, acceleration_type="anderson", **kwargs)
+
+        opt = torch.optim.SGD(self._fresh_model().parameters(), lr=1e-2)
+        accelerate(opt, acceleration_type="anderson")
+        with self.assertRaisesRegex(ValueError, "already wrapped"):
+            accelerate(opt, acceleration_type="anderson")
+
+    def test_invalid_acceptance_policy_configuration(self):
+        from AADL.distributed import accept_candidate
+
+        for kwargs in (
+            {"policy": "unknown"},
+            {"policy": "vote", "vote_threshold": 1.1},
+            {"policy": "mean_loss", "loss_weight": 0.0},
+        ):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                accept_candidate(torch.tensor(1.0), torch.tensor(2.0), **kwargs)
+
+    def test_reset_acceleration_history(self):
+        model = self._fresh_model()
+        opt = torch.optim.SGD(model.parameters(), lr=1e-2)
+        accelerate(opt, acceleration_type="anderson", history_depth=4)
+        opt.zero_grad()
+        model(self.X).sum().backward()
+        opt.step()
+        self.assertGreater(opt.acc_param_hist[0]["count"], 0)
+        reset_acceleration_history(opt)
+        self.assertEqual(opt.acc_param_hist[0]["count"], 0)
+        self.assertIsNone(opt.acc_param_hist[0]["buf"])
+
+    def test_multigroup_safeguard_is_atomic(self):
+        import AADL.anderson_acceleration as anderson_mod
+
+        p1 = torch.nn.Parameter(torch.tensor([2.0]))
+        p2 = torch.nn.Parameter(torch.tensor([2.0]))
+        opt = torch.optim.SGD([{"params": [p1]}, {"params": [p2]}], lr=0.1)
+        accelerate(
+            opt, acceleration_type="anderson", wait_iterations=0,
+            history_depth=4, frequency=1, store_each_nth=1,
+        )
+
+        def closure():
+            with torch.enable_grad():
+                opt.zero_grad()
+                loss = p1.square().sum() + p2.square().sum()
+                loss.backward()
+            return loss
+
+        # Three entries are required before an acceleration attempt.
+        for _ in range(2):
+            opt.step(closure)
+
+        calls = []
+        plain = []
+
+        def _mixed_candidate(Xhist, *args, **kwargs):
+            plain.append(Xhist[:, -1].clone())
+            value = 0.0 if not calls else 1e6
+            calls.append(value)
+            return torch.full_like(Xhist[:, -1], value)
+
+        original = anderson_mod.get_acceleration
+        anderson_mod.get_acceleration = lambda acc_type: _mixed_candidate
+        try:
+            opt.step(closure)
+        finally:
+            anderson_mod.get_acceleration = original
+
+        # The second group's divergent candidate rejects the optimizer-wide
+        # transaction, including the individually beneficial first candidate.
+        self.assertTrue(torch.allclose(p1.detach(), plain[0]))
+        self.assertTrue(torch.allclose(p2.detach(), plain[1]))
+
     def test_closure_none_disables_safeguard(self):
         # With no closure there is no loss to compare against, so the safeguard
         # is skipped and the accelerated candidate is accepted unconditionally.
@@ -357,10 +434,7 @@ class TestAccelerateAPI(unittest.TestCase):
             "closure=None should accept the candidate unconditionally",
         )
 
-    def test_distributed_vote_threshold(self):
-        # The distributed safeguard accepts iff the fraction of ranks voting to
-        # accept exceeds acc_vote_threshold. With 2 ranks and only rank 0
-        # improving, the accepting fraction is 0.5.
+    def test_distributed_acceptance_policies(self):
         if not (torch.distributed.is_available()
                 and torch.distributed.is_gloo_available()):
             self.skipTest("gloo backend not available")
@@ -368,13 +442,13 @@ class TestAccelerateAPI(unittest.TestCase):
         import torch.multiprocessing as mp
 
         ctx = mp.get_context("spawn")
-        for threshold, expected in [(0.4, True), (0.9, False)]:
+        for policy in ("vote", "mean_loss"):
             result_queue = ctx.Queue()
             port = _free_port()
             procs = [
                 ctx.Process(
-                    target=_vote_worker,
-                    args=(rank, 2, port, threshold, result_queue),
+                    target=_acceptance_worker,
+                    args=(rank, 2, port, policy, result_queue),
                 )
                 for rank in range(2)
             ]
@@ -391,8 +465,8 @@ class TestAccelerateAPI(unittest.TestCase):
 
             for rank, accepted in results:
                 self.assertEqual(
-                    accepted, expected,
-                    f"rank {rank}: threshold={threshold} expected {expected}",
+                    accepted, True,
+                    f"rank {rank}: policy={policy} expected acceptance",
                 )
 
 

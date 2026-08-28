@@ -1,14 +1,19 @@
 # Anderson Accelerated Deep Learning (AADL)
 
-AADL is a Python package that implements the Anderson acceleration to speed-up the training of deep learning (DL) models using the PyTorch library.\
-AA is an extrapolation technique that can accelerate fixed-point iterations such those arising from the iterative training of DL models. However, large volume of data are typically processed in sequential random batches which introduces stochastic oscillations in the fixed-point iteration that hinders AA acceleration. AADL implements a moving average that reduces the oscillations and results in a smoother sequence of gradient descent updates which enables the use of AA. AADL uses a criterion to automatically decide if the moving average is needed by monitoring if the relative standard deviation between consecutive stochastic gradient updates exceeds a tolerance defined by the user.
+AADL adds Anderson acceleration to existing PyTorch optimizers. It stores a
+bounded history of parameter iterates, solves a small least-squares problem,
+and optionally replaces a normal optimizer update with an extrapolated one.
+
+AADL supports QR and normal-equation Anderson kernels, safeguards, mixed
+precision, conditioning controls, moving-average smoothing, multiple optimizer
+parameter groups, and PyTorch-native Post-LocalSGD integration.
 
 ## Requirements
-Python 3.8 or greater\
-PyTorch (`torch>=2.1`) and NumPy
+Python 3.11 or greater\
+PyTorch (`torch>=2.13`) and NumPy (`numpy>=2.0`)
 
-> `torch>=2.1` is required because the acceleration kernels use
-> `torch.linalg.solve_triangular` and `torch._foreach_copy_`.
+These minimum versions are enforced by the package metadata and
+`requirements.txt`.
 
 ## Installation
 
@@ -47,12 +52,30 @@ scikit-image, opencv-python, docopt, pyyaml). Install them with:
 python -m pip install -r requirements-examples.txt
 ```
 
-### Running the tests
+### Running tests
 
 ```bash
 python -m unittest discover -s tests -t . -v          # fast suite
 RUN_SLOW_TESTS=1 python -m unittest discover -s tests -t . -v   # full suite
 ```
+
+The slow suite contains numerical convergence experiments whose results can be
+sensitive to optimizer and PyTorch version changes. The fast suite contains the
+API, kernel, safeguard, and distributed-policy regression tests.
+
+## Architecture
+
+AADL has three distinct responsibilities:
+
+- `AADL.accelerate` wraps a local PyTorch optimizer and computes Anderson
+  candidates. It does not synchronize gradients or model parameters.
+- PyTorch DDP/Post-LocalSGD owns gradient communication, process groups, and
+  periodic model averaging.
+- AADL's distributed acceptance layer compares globally averaged plain and
+  Anderson branches and reduces only scalar loss statistics.
+
+This separation avoids maintaining a second implementation of DDP, LocalSGD,
+or FedAvg-style parameter averaging inside AADL.
 
 ## Usage
 
@@ -62,41 +85,129 @@ import torch.nn
 import torch.optim
 import AADL
 
-# Creation of the DL model (neural network)
-class model(torch.nn.Module):
-	...
+model = torch.nn.Linear(8, 1)
+optimizer = torch.optim.SGD(model.parameters(), lr=1e-3, momentum=0.9)
 
-# Definition of the stochastic optimizer used to train the model
-optimizer = torch.optim.SGD(model.parameters(), lr=1e-3, momentum=0.9, nesterov = True)
+AADL.accelerate(
+    optimizer,
+    acceleration_type="anderson",
+    relaxation=0.5,
+    wait_iterations=0,
+    history_depth=10,
+    store_each_nth=1,
+    frequency=1,
+    reg_acc=1e-8,
+    safeguard=True,
+)
 
-# Parameters for Anderson acceleration
-relaxation = 0.5
-wait_iterations = 0
-history_depth = 10
-store_each_nth = 10
-frequency = store_each_nth
-reg_acc = 0.0
-safeguard = True
-average = True
+def closure():
+    with torch.enable_grad():
+        optimizer.zero_grad()
+        loss = loss_fn(model(inputs), targets)
+        loss.backward()
+    return loss
 
-# Over-writing of the torch.optim.step() method 
-AADL.accelerate(optimizer_anderson, "anderson", relaxation, wait_iterations, history_depth, store_each_nth, frequency, reg_acc, average)
-
+loss = optimizer.step(closure)
 ```
 
-## Meaning of hyperparameters
-```relaxation```: Float. Linear mixing parameter between a standard gradient descent update and the Anderson update\
-```wait_iterations```: Integer. Number of initial gradient descent updates to wait before starting the Anderson scheme\
-```history_depth```: Integer. Number of gradient updates used to compute the Anderson mixing. The history is updated with a first-in-first-out policy\
-```store_each_nth```: Integer. Number of gradient updates to skip between two vector updates consecutively stored in the history window\
-```frequency```: Integer. Number of gradient updates to skip between two consecutive Anderson steps\
-```reg_acc```: Float. Tikhonov regularization factor used to stabilize the least-squares problem solved to compute the Anderson mixing vector\
-```mixing_dtype```: ``None``, ``torch.dtype``, or string (e.g. ``"float32"``, ``"float64"``). Floating-point precision at which the Anderson mixing vector is computed. ``None`` keeps the parameter dtype; a lower precision speeds up the least-squares solve while the extrapolated parameters are always cast back to their original dtype. Portable choices are ``float32`` and ``float64``; ``float16``/``bfloat16`` are not supported by ``torch.linalg`` on CPU (and only conditionally on GPU) and raise a clear error if requested there\
-```equilibrate```: Boolean (default ``True``). Scales the columns of the difference matrix to unit norm before the least-squares solve, which improves conditioning. It is an exact change of variables for the unregularized, full-rank problem (the mixing vector is unchanged up to round-off) and is generally beneficial\
-```filter_condition```: Float (default ``0.0``, disabled). If greater than ``0``, oldest history columns are dropped (Walker-Ni filtering) until the 2-norm condition number of the least-squares matrix falls below this threshold. The condition number is estimated cheaply from the small Gram matrix. Use it to stabilize the solve when the history becomes nearly rank-deficient\
-```refinement_steps```: Integer (default ``0``, disabled). Number of mixed-precision iterative-refinement steps applied to the mixing vector: the residual is formed in the parameter precision while the correction reuses the reduced-precision factor, recovering accuracy cheaply when ``mixing_dtype`` is lower than the parameter dtype. A monotone guard rejects any non-improving step, so refinement never diverges on ill-conditioned systems (it becomes a no-op instead)\
-```safeguard```: Boolean. If set to True, the Anderson step is kept only when it strictly reduces the loss relative to the plain optimizer step it would otherwise revert to (the comparison uses the post-step loss, so a candidate that is worse than not accelerating is rejected). Non-finite (``NaN``/``Inf``) candidates from a degenerate solve are also rejected. Requires passing a ``closure`` to ``optimizer.step``; with no closure the safeguard is disabled and the accelerated step is always accepted\
-```average```: Boolean. If set to True, a movign average is applied to the history window before computing the Anderson step\ 
+### Acceleration implementations
+
+- `anderson`: QR-factorization kernel and the recommended default.
+- `anderson_normal_equation`: normal-equation kernel, which may be faster but
+  is more sensitive to ill-conditioned histories.
+- `identity`: disables Anderson acceleration; with `average=True`, it retains
+  only moving-average behavior.
+
+### Main options
+
+- `relaxation`: mixing weight in `(0, 1]`.
+- `wait_iterations`: ordinary optimizer steps before acceleration begins.
+- `history_depth`: capacity of the FIFO/ring history.
+- `store_each_nth`: cadence for storing parameter iterates.
+- `frequency`: cadence for attempting Anderson acceleration.
+- `reg_acc`: non-negative Tikhonov regularization.
+- `safeguard`: compare the candidate against the post-optimizer plain step.
+  This requires a closure; without one, the candidate is accepted.
+- `average`: enable stochastic-history moving-average smoothing.
+- `history_device` and `compute_device`: independently place stored history and
+  the small Anderson solve.
+- `mixing_dtype`: `None`, a `torch.dtype`, or a dtype string such as
+  `"float32"` or `"float64"`.
+- `equilibrate`: unit-scale difference-matrix columns before solving.
+- `filter_condition`: drop oldest columns until the requested condition bound
+  is met; `0` disables filtering.
+- `refinement_steps`: mixed-precision iterative-refinement iterations; `0`
+  disables refinement.
+
+All size and cadence arguments are validated. Calling `accelerate` twice on the
+same optimizer raises an error; call `AADL.remove_acceleration(optimizer)`
+before changing its configuration.
+
+## Distributed training
+
+AADL composes with PyTorch's native Post-LocalSGD hook and model averager:
+
+```python
+from torch.distributed.algorithms.ddp_comm_hooks.post_localSGD_hook import (
+    PostLocalSGDState,
+    post_localSGD_hook,
+)
+from AADL import HistoryResetPeriodicModelAverager, average_and_accept
+
+state = PostLocalSGDState(
+    process_group=None,
+    subgroup=None,
+    start_localSGD_iter=100,
+)
+ddp_model.register_comm_hook(state, post_localSGD_hook)
+
+local_optimizer = torch.optim.SGD(ddp_model.parameters(), lr=1e-2)
+AADL.accelerate(
+    local_optimizer,
+    acceleration_type="anderson",
+    safeguard=False,  # acceptance is decided globally below
+)
+
+averager = HistoryResetPeriodicModelAverager(
+    local_optimizer, period=4, warmup_steps=100,
+)
+# In the training loop, use a closure for the two global loss evaluations:
+local_optimizer.step(closure)
+average_and_accept(
+    local_optimizer,
+    averager,
+    closure,
+    policy="vote",            # or "mean_loss"
+    vote_threshold=0.5,
+    loss_weight=local_batch_size,
+)
+```
+
+`average_and_accept` returns `None` between averaging boundaries. At a boundary
+it returns `(accepted, candidate_loss, baseline_loss)` and leaves every rank on
+the same selected global parameters.
+
+Available global policies are:
+
+- `vote`: accept when at least `vote_threshold` of ranks report a lower local
+  loss for the shared global Anderson candidate.
+- `mean_loss`: accept when the sample-weighted global loss difference is
+  negative. Set `loss_weight` to the rank's local sample count.
+
+Both branches are averaged through PyTorch's native model-averaging utilities.
+Loss-only closure evaluations run under `torch.no_grad()`, so the closure must
+guard backward work with `torch.is_grad_enabled()` to avoid extra DDP gradient
+synchronization. See [Distributed training](docs/distributed.md) for the
+execution sequence, policy semantics, and integration requirements.
+
+## Public lifecycle helpers
+
+- `AADL.reset_acceleration_history(optimizer)`: clear history after any
+  external parameter-changing operation.
+- `AADL.remove_acceleration(optimizer)`: restore the original optimizer step
+  and remove AADL state.
+- `AADL.accept_candidate(...)`: low-level scalar policy reducer for advanced
+  integrations that already provide comparable candidate and baseline losses.
 
 
 ## Contributing
@@ -111,4 +222,3 @@ M. Lupo Pasini, V. Reshniak, and M. K. Stoyanov. AADL: Anderson Accelerated Deep
 
 ### Publications
 M. Lupo Pasini, J. Yin, V. Reshniak and M. K. Stoyanov, "Anderson Acceleration for Distributed Training of Deep Learning Models," SoutheastCon 2022, 2022, pp. 289-295, doi: 10.1109/SoutheastCon48659.2022.9763953.
-
