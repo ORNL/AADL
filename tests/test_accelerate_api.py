@@ -311,7 +311,8 @@ class TestAccelerateAPI(unittest.TestCase):
             {"history_depth": 0}, {"store_each_nth": 0}, {"frequency": 0},
             {"wait_iterations": -1},
             {"relaxation": 0.0}, {"relaxation": 1.1}, {"reg_acc": -1.0},
-            {"filter_condition": -1.0}, {"refinement_steps": -1},
+            {"reg_acc": True}, {"filter_condition": -1.0},
+            {"filter_condition": True}, {"refinement_steps": -1},
         )
         for kwargs in invalid:
             opt = torch.optim.SGD(self._fresh_model().parameters(), lr=1e-2)

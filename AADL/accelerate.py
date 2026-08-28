@@ -296,9 +296,13 @@ def accelerate(
             or not math.isfinite(relaxation)
             or not 0.0 < relaxation <= 1.0):
         raise ValueError("relaxation must be in (0, 1]")
-    if not isinstance(reg_acc, (int, float)) or not math.isfinite(reg_acc) or reg_acc < 0.0:
+    if (not isinstance(reg_acc, (int, float))
+            or isinstance(reg_acc, bool)
+            or not math.isfinite(reg_acc)
+            or reg_acc < 0.0):
         raise ValueError("reg_acc must be non-negative")
     if (not isinstance(filter_condition, (int, float))
+            or isinstance(filter_condition, bool)
             or not math.isfinite(filter_condition)
             or filter_condition < 0.0):
         raise ValueError("filter_condition must be non-negative")
