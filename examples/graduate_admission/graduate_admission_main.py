@@ -55,8 +55,7 @@ import numpy
 
 sys.path.append("../../utils")
 from optimizers import FixedPointIteration, DeterministicAcceleration
-sys.path.append("../../model_zoo")
-from NN_models import MLP
+from AADL.models import MLP
 from graduate_admission_dataloader import dataloader
 
 from gpu_detection import get_gpu
@@ -255,4 +254,3 @@ if __name__ == '__main__':
             plt.tight_layout()
             plt.draw()
             plt.savefig('validation_loss_plot')
-

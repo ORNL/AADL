@@ -27,25 +27,7 @@ from gpu_detection import get_gpu
 from monitor_progress_utils import progress_bar
 
 
-# Import paths to NN models that can be used for object classification
-import sys
-sys.path.append("../../../model_zoo")
-from densenet import *
-from dla import *
-from dla_simple import *
-from dpn import *
-from efficientnet import *
-from googlenet import *
-from lenet import *
-from mobilenetv2 import *
-from pnasnet import *
-from preact_resnet import *
-from regnet import *
-from resnet import *
-from resnext import *
-from shufflenet import *
-from shufflenetv2 import *
-from vgg import *
+from AADL.models.vision import create_model
 
 
 class Optimization:
@@ -204,7 +186,7 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer',
 # Model
 print('==> Building model..')
 # net = VGG('VGG19')
-net = ResNet18()
+net = create_model("resnet18")
 # net = PreActResNet18()
 # net = GoogLeNet()
 # net = DenseNet121()
@@ -288,4 +270,3 @@ plt.ylabel('Accuracy (%)')
 plt.draw()
 plt.savefig('validation_accuracy_plot')
 plt.tight_layout()
-

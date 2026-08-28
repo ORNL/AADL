@@ -55,8 +55,7 @@ import numpy
 
 sys.path.append("../../utils")
 from optimizers import FixedPointIteration, DeterministicAcceleration
-sys.path.append("../../model_zoo")
-from NN_models import CNN2D
+from AADL.models import CNN2D
 from mnist_dataloader import dataloader
 
 from gpu_detection import get_gpu

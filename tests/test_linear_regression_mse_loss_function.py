@@ -1,13 +1,10 @@
-import sys
 import torch
 import numpy
 import unittest
 from torch.utils.data import Dataset
 
-sys.path.append('../utils')
 from optimizers import FixedPointIteration, DeterministicAcceleration
-sys.path.append('../model_zoo')
-from LinearRegression_models import LinearRegression
+from AADL.models import LinearRegression
 
 from tests._slow import slow
 

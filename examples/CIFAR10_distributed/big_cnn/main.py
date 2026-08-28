@@ -43,25 +43,7 @@ def setup_ddp():
     os.environ['OMP_NUM_THREADS'] = str(20//int(os.environ["WORLD_SIZE"]))
     torch.set_num_threads(20//int(os.environ["WORLD_SIZE"]))
 
-# Import paths to NN models that can be used for object classification
-import sys
-sys.path.append("../../../model_zoo")
-from densenet import *
-from dla import *
-from dla_simple import *
-from dpn import *
-from efficientnet import *
-from googlenet import *
-from lenet import *
-from mobilenetv2 import *
-from pnasnet import *
-from preact_resnet import *
-from regnet import *
-from resnet import *
-from resnext import *
-from shufflenet import *
-from shufflenetv2 import *
-from vgg import *
+from AADL.models.vision import create_model
 
 
 class Optimization:
@@ -229,7 +211,7 @@ testloader  = torch.utils.data.DataLoader(testset,  batch_size=100, shuffle=Fals
 # Model
 print('==> Building model..')
 # net = VGG( 'VGG19', num_classes = 1000 )
-net = ResNet18( num_classes = 10 )
+net = create_model("resnet18", num_classes=10)
 # net = PreActResNet18( num_classes = 1000 )
 # net = GoogLeNet( num_classes = 1000 )
 # net = DenseNet121( num_classes = 1000 )

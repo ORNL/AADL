@@ -200,6 +200,22 @@ guard backward work with `torch.is_grad_enabled()` to avoid extra DDP gradient
 synchronization. See [Distributed training](docs/distributed.md) for the
 execution sequence, policy semantics, and integration requirements.
 
+## Reference models
+
+Reusable reference models are available through stable package imports:
+
+```python
+from AADL.models import MLP
+from AADL.models.vision import create_model, list_models
+
+network = create_model("resnet18", num_classes=10)
+print(list_models())
+```
+
+Numerical models used only by the test suite live in `tests.fixtures`. The
+top-level `model_zoo` modules remain as source-tree compatibility shims for
+legacy examples; new code should import from `AADL.models`.
+
 ## Public lifecycle helpers
 
 - `AADL.reset_acceleration_history(optimizer)`: clear history after any

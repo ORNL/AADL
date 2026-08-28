@@ -1,12 +1,9 @@
-import sys
 import torch
 import numpy
 import unittest
 
-sys.path.append('../utils')
 from optimizers import FixedPointIteration, DeterministicAcceleration
-sys.path.append('../model_zoo')
-from TestFunctions_models import Rosenbrock
+from tests.fixtures.models import Rosenbrock
 
 from tests._slow import slow
 
