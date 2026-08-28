@@ -1,8 +1,9 @@
-"""Pytest/unittest path fixup so tests run from the repository root.
+"""Pytest path fixup so tests run from the repository root.
 
 Some legacy test helpers still live in ``utils`` outside the installed
 package. This conftest makes them available regardless of the current
-working directory.
+working directory. Unittest discovery gets the equivalent setup from
+``tests.__init__`` instead.
 """
 
 import os

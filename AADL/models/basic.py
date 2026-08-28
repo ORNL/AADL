@@ -9,7 +9,7 @@ def activation_function(name_activation):
     elif name_activation == 'sigmoid':
         return torch.nn.Sigmoid()
     elif name_activation == 'softmax':
-        return torch.nn.Softmax()
+        return torch.nn.Softmax(dim=-1)
     elif name_activation == 'tanh':
         return torch.nn.Tanh()
     elif name_activation == 'leakyrelu':
@@ -149,7 +149,7 @@ class MLP(NeuralNetwork, ABC):
 
         # Activation function for classification problem
         if classification:
-            self.layers += [torch.nn.LogSoftmax()]
+            self.layers += [torch.nn.LogSoftmax(dim=-1)]
 
         # Multilayer perceptron
         self.model = torch.nn.Sequential(*self.layers)
@@ -231,7 +231,7 @@ class CNN2D(NeuralNetwork, ABC):
                             bias=self.use_bias)]
 
         # Activation function for classification problem
-        self.layers += [torch.nn.LogSoftmax()]
+        self.layers += [torch.nn.LogSoftmax(dim=-1)]
 
         # Convolutional neural network
         self.model = torch.nn.Sequential(*self.layers)

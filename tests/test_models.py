@@ -2,7 +2,7 @@ import unittest
 
 import torch
 
-from AADL.models import LinearRegression, MLP
+from AADL.models import LinearRegression, MLP, activation_function
 from AADL.models.vision import create_model, list_models
 from tests.fixtures.models import Paraboloid, Rosenbrock
 
@@ -14,6 +14,16 @@ class ModelPackageTests(unittest.TestCase):
 
         self.assertEqual(regression(torch.ones(1, 1)).shape, (1, 1))
         self.assertEqual(mlp(torch.ones(1, 1)).shape, (1,))
+
+    def test_classification_activations_use_last_dimension(self):
+        softmax = activation_function("softmax")
+        mlp = MLP(2, 3, [4], True, "relu", classification=True)
+
+        self.assertEqual(softmax.dim, -1)
+        self.assertEqual(mlp.model[-1].dim, -1)
+        self.assertTrue(torch.allclose(
+            mlp(torch.ones(2, 2)).exp().sum(dim=-1), torch.ones(2)
+        ))
 
     def test_test_models_live_in_fixtures(self):
         self.assertEqual(Rosenbrock(2, initial_guess=[1, 1])(None).item(), 0.0)
