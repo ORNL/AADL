@@ -195,9 +195,10 @@ Available global policies are:
   negative. Set `loss_weight` to the rank's local sample count.
 
 Both branches are averaged through PyTorch's native model-averaging utilities.
-Loss-only closure evaluations run under `torch.no_grad()`, avoiding extra DDP
-gradient synchronization. See [Distributed training](docs/distributed.md) for
-the execution sequence, policy semantics, and integration requirements.
+Loss-only closure evaluations run under `torch.no_grad()`, so the closure must
+guard backward work with `torch.is_grad_enabled()` to avoid extra DDP gradient
+synchronization. See [Distributed training](docs/distributed.md) for the
+execution sequence, policy semantics, and integration requirements.
 
 ## Public lifecycle helpers
 
