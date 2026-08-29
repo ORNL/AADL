@@ -213,8 +213,8 @@ print(list_models())
 ```
 
 Numerical models used only by the test suite live in `tests.fixtures`. The
-top-level `model_zoo` modules remain as source-tree compatibility shims for
-legacy examples; new code should import from `AADL.models`.
+legacy top-level `model_zoo` namespace has been removed; import reusable models
+from `AADL.models` and test-only numerical models from `tests.fixtures`.
 
 ## Public lifecycle helpers
 
