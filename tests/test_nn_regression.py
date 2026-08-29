@@ -1,14 +1,11 @@
-import sys
 import numpy
 import torch
 from torch.utils.data import Dataset
 
 import unittest
 
-sys.path.append('../utils')
 from optimizers import FixedPointIteration, DeterministicAcceleration
-sys.path.append('../model_zoo')
-from NN_models import MLP
+from AADL.models import MLP
 
 from tests._slow import slow
 

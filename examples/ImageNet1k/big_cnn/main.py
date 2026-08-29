@@ -47,25 +47,7 @@ def setup_ddp():
     os.environ['RANK'] = world_rank
     dist.init_process_group(backend=backend, rank=int(world_rank), world_size=int(world_size))
 
-# Import paths to NN models that can be used for object classification
-import sys
-sys.path.append("../../../model_zoo")
-from densenet import *
-from dla import *
-from dla_simple import *
-from dpn import *
-from efficientnet import *
-from googlenet import *
-from lenet import *
-from mobilenetv2 import *
-from pnasnet import *
-from preact_resnet import *
-from regnet import *
-from resnet import *
-from resnext import *
-from shufflenet import *
-from shufflenetv2 import *
-from vgg import *
+from AADL.models.vision import create_model
 
 
 class Optimization:
@@ -242,7 +224,7 @@ print('==> Building model..')
 # net = ShuffleNetV2( num_classes = 1000 )
 # net = EfficientNetB0( num_classes = 1000 )
 # net = RegNetX_200MF( num_classes = 1000 )
-# net = SimpleDLA( num_classes = 1000 )
+net = create_model("resnet18", num_classes=1000)
 
 torch.manual_seed(0)
 

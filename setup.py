@@ -1,10 +1,9 @@
-from setuptools import setup
+from setuptools import find_packages, setup
 # Note: setup() has access to cmd arguments of the setup.py script via sys.argv
 
 setup(name="AADL",
       version='1.0',
-      package_dir={'AADL': 'AADL'},
-      packages=['AADL'],
+      packages=find_packages(include=['AADL', 'AADL.*']),
       python_requires='>=3.11',
       install_requires=[
           'torch>=2.13',
