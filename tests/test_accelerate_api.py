@@ -11,10 +11,12 @@ unit test in well under a second.
 """
 
 import unittest
+from types import SimpleNamespace
 
 import torch
 
 from AADL import accelerate, remove_acceleration, reset_acceleration_history
+from AADL.accelerate import _sketch_fractions, _stratified_sketch_indices
 
 
 def _free_port():
@@ -87,6 +89,39 @@ class TestAccelerateAPI(unittest.TestCase):
     def _fresh_model(self):
         torch.manual_seed(0)
         return torch.nn.Linear(self.X.size(1), 1, bias=False)
+
+    def test_adaptive_sketch_fraction_sequence_honors_growth_and_cap(self):
+        config = SimpleNamespace(
+            acc_sketch_fraction=0.1,
+            acc_sketch_policy="adaptive",
+            acc_sketch_growth_factor=2.0,
+            acc_sketch_max_fraction=0.5,
+        )
+        fractions = list(_sketch_fractions(config, can_retry=True))
+        expected = [0.1, 0.2, 0.4, 0.5]
+        self.assertEqual(len(fractions), len(expected))
+        for actual, wanted in zip(fractions, expected):
+            self.assertAlmostEqual(actual, wanted)
+
+        # Fixed policy and missing safeguard signals both permit one attempt.
+        config.acc_sketch_policy = "fixed"
+        self.assertEqual(list(_sketch_fractions(config, True)), [0.1])
+        config.acc_sketch_policy = "adaptive"
+        self.assertEqual(list(_sketch_fractions(config, False)), [0.1])
+
+    def test_stratified_sketch_is_reproducible_unique_and_ordered(self):
+        first = _stratified_sketch_indices(100, 13, "cpu", seed=42)
+        second = _stratified_sketch_indices(100, 13, "cpu", seed=42)
+        different = _stratified_sketch_indices(100, 13, "cpu", seed=43)
+
+        self.assertTrue(torch.equal(first, second))
+        self.assertFalse(torch.equal(first, different))
+        self.assertEqual(first.numel(), 13)
+        self.assertEqual(torch.unique(first).numel(), 13)
+        self.assertTrue(bool(torch.all(first[1:] > first[:-1])))
+        self.assertGreaterEqual(int(first.min()), 0)
+        self.assertLess(int(first.max()), 100)
+        self.assertIsNone(_stratified_sketch_indices(100, 100, "cpu", seed=42))
 
     def test_acceleration_speedup(self):
         target_loss = 1e-4
@@ -313,6 +348,11 @@ class TestAccelerateAPI(unittest.TestCase):
             {"relaxation": 0.0}, {"relaxation": 1.1}, {"reg_acc": -1.0},
             {"reg_acc": True}, {"filter_condition": -1.0},
             {"filter_condition": True}, {"refinement_steps": -1},
+            {"sketch_fraction": 0.0}, {"sketch_fraction": True},
+            {"sketch_max_fraction": 1.1},
+            {"sketch_fraction": 0.8, "sketch_max_fraction": 0.5},
+            {"sketch_policy": "unknown"}, {"sketch_growth_factor": 1.0},
+            {"sketch_seed": -1}, {"sketch_seed": True},
         )
         for kwargs in invalid:
             opt = torch.optim.SGD(self._fresh_model().parameters(), lr=1e-2)
@@ -389,6 +429,114 @@ class TestAccelerateAPI(unittest.TestCase):
         # transaction, including the individually beneficial first candidate.
         self.assertTrue(torch.allclose(p1.detach(), plain[0]))
         self.assertTrue(torch.allclose(p2.detach(), plain[1]))
+
+    def test_adaptive_sketch_retries_with_full_system(self):
+        import AADL.anderson_acceleration as anderson_mod
+
+        parameter = torch.nn.Parameter(torch.full((8,), 2.0))
+        opt = torch.optim.SGD([parameter], lr=0.1)
+        accelerate(
+            opt, acceleration_type="anderson", wait_iterations=0,
+            history_depth=4, frequency=1, sketch_fraction=0.25,
+            sketch_policy="adaptive", sketch_growth_factor=4.0,
+            sketch_max_fraction=1.0,
+        )
+
+        def closure():
+            with torch.enable_grad():
+                opt.zero_grad()
+                loss = parameter.square().sum()
+                loss.backward()
+            return loss
+
+        # Two entries do not yet trigger Anderson; the third step does.
+        opt.step(closure)
+        opt.step(closure)
+        sampled_rows = []
+
+        def _candidate(Xhist, *args, row_indices=None, **kwargs):
+            sampled_rows.append(Xhist.size(0) if row_indices is None
+                                else row_indices.numel())
+            if row_indices is not None:
+                return torch.full_like(Xhist[:, -1], 1e6)
+            return torch.zeros_like(Xhist[:, -1])
+
+        original = anderson_mod.get_acceleration
+        anderson_mod.get_acceleration = lambda acc_type: _candidate
+        try:
+            opt.step(closure)
+        finally:
+            anderson_mod.get_acceleration = original
+
+        self.assertEqual(sampled_rows, [2, 8])
+        self.assertTrue(torch.equal(parameter.detach(), torch.zeros_like(parameter)))
+        self.assertEqual(opt.acc_last_sketch_fraction, 1.0)
+
+    def test_adaptive_sketch_falls_back_after_maximum_is_rejected(self):
+        import AADL.anderson_acceleration as anderson_mod
+
+        parameter = torch.nn.Parameter(torch.full((20,), 2.0))
+        opt = torch.optim.SGD([parameter], lr=0.1)
+        accelerate(
+            opt, acceleration_type="anderson", wait_iterations=0,
+            history_depth=4, frequency=1, sketch_fraction=0.1,
+            sketch_policy="adaptive", sketch_growth_factor=2.0,
+            sketch_max_fraction=0.5,
+        )
+
+        def closure():
+            loss = parameter.square().sum()
+            if torch.is_grad_enabled():
+                opt.zero_grad()
+                loss.backward()
+            return loss
+
+        opt.step(closure)
+        opt.step(closure)
+        attempted_rows = []
+        plain = None
+
+        def _always_bad(Xhist, *args, row_indices=None, **kwargs):
+            nonlocal plain
+            plain = Xhist[:, -1].clone()
+            attempted_rows.append(row_indices.numel())
+            return torch.full_like(plain, 1e6)
+
+        original = anderson_mod.get_acceleration
+        anderson_mod.get_acceleration = lambda acc_type: _always_bad
+        try:
+            opt.step(closure)
+        finally:
+            anderson_mod.get_acceleration = original
+
+        self.assertEqual(attempted_rows, [2, 4, 8, 10])
+        self.assertTrue(torch.allclose(parameter.detach(), plain))
+        self.assertEqual(opt.acc_last_sketch_fraction, 0.5)
+
+    def test_safeguard_closures_are_loss_only(self):
+        parameter = torch.nn.Parameter(torch.full((8,), 2.0))
+        opt = torch.optim.SGD([parameter], lr=0.1)
+        accelerate(
+            opt, acceleration_type="anderson", wait_iterations=0,
+            history_depth=4, frequency=1,
+        )
+        grad_modes = []
+
+        def closure():
+            grad_modes.append(torch.is_grad_enabled())
+            loss = parameter.square().sum()
+            if torch.is_grad_enabled():
+                opt.zero_grad()
+                loss.backward()
+            return loss
+
+        for _ in range(3):
+            opt.step(closure)
+
+        # One gradient-bearing optimizer closure per step. The third step also
+        # evaluates the plain and accelerated losses without backward work.
+        self.assertEqual(grad_modes.count(True), 3)
+        self.assertGreaterEqual(grad_modes.count(False), 2)
 
     def test_closure_none_disables_safeguard(self):
         # With no closure there is no loss to compare against, so the safeguard

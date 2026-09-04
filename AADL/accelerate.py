@@ -53,6 +53,50 @@ def _history_chrono(state, capacity, compute_device):
     return rows.to(device=compute_device).t().contiguous()
 
 
+def _stratified_sketch_indices(num_rows, requested_rows, device, seed):
+    """Select one random coordinate from each of ``requested_rows`` strata.
+
+    Unlike ``randperm(num_rows)``, this uses O(requested_rows) temporary
+    storage.  The returned indices are ordered, which also makes the gather
+    friendlier to CPU/GPU memory systems than an arbitrary permutation.
+    """
+    if requested_rows >= num_rows:
+        return None
+    generator = torch.Generator(device="cpu").manual_seed(seed)
+    offsets = torch.rand(requested_rows, generator=generator, dtype=torch.float64)
+    strata = torch.arange(requested_rows, dtype=torch.float64)
+    indices = torch.floor((strata + offsets) * num_rows / requested_rows).long()
+    return indices.to(device=device)
+
+
+def _sketch_rows(self, X, fraction, group_index, attempt):
+    num_rows = X.size(0)
+    # A QR solve needs at least as many sampled rows as retained columns.
+    min_rows = max(1, X.size(1) - 2)
+    requested = max(min_rows, math.ceil(num_rows * fraction))
+    seed = (self.acc_sketch_seed
+            + 1_000_003 * self.acc_call_counter
+            + 10_007 * group_index
+            + 101 * attempt)
+    return _stratified_sketch_indices(
+        num_rows, min(requested, num_rows), X.device, seed,
+    )
+
+
+def _sketch_fractions(self, can_retry):
+    """Yield the initial sketch and any progressively more accurate retries."""
+    fraction = self.acc_sketch_fraction
+    yield fraction
+    if self.acc_sketch_policy != "adaptive" or not can_retry:
+        return
+    while fraction < self.acc_sketch_max_fraction:
+        fraction = min(
+            self.acc_sketch_max_fraction,
+            fraction * self.acc_sketch_growth_factor,
+        )
+        yield fraction
+
+
 def _store_current_params(self):
     """Append current parameters to the ring buffer if it's time to.
 
@@ -124,7 +168,14 @@ def _unified_step(self, closure=None):
         # moving-average sweep before the underlying optimizer step
         _moving_average_step(self)
 
-    orig_loss = self.orig_step(closure)
+    # The optimizer owns the gradient-bearing closure invocation. AADL's
+    # baseline/candidate evaluations below deliberately remain under no_grad.
+    step_closure = None
+    if closure is not None:
+        def step_closure():
+            with torch.enable_grad():
+                return closure()
+    orig_loss = self.orig_step(step_closure)
     self.acc_last_plain = None
 
     _store_current_params(self)
@@ -146,20 +197,14 @@ def _unified_step(self, closure=None):
     # fallback consistent. Costs one extra forward eval per acceleration cycle.
     safeguard_closure = closure if self.acc_safeguard else None
     base_loss = safeguard_closure() if safeguard_closure is not None else orig_loss
-    candidates = []
+    histories = []
     for group, state in zip(self.param_groups, self.acc_param_hist):
         X = _history_chrono(state, capacity, self.compute_device)
         if X is None:
             continue
-        acc_param = accel_fn(
-            X, self.acc_relaxation, self.acc_reg, self.acc_dtype,
-            equilibrate=self.acc_equilibrate,
-            filter_condition=self.acc_filter_condition,
-            refinement_steps=self.acc_refinement_steps,
-        )
-        candidates.append((group, state, acc_param))
+        histories.append((group, state, X))
 
-    if not candidates:
+    if not histories:
         return base_loss
 
     # Retain the local plain iterate for an optional native model-averaging
@@ -167,27 +212,51 @@ def _unified_step(self, closure=None):
     # are included, matching PyTorch's model-averaging filter.
     self.acc_last_plain = [
         (param, param.detach().clone())
-        for group, _, _ in candidates
+        for group, _, _ in histories
         for param in group["params"]
         if param.grad is not None
     ]
 
-    # Apply every group before evaluating the candidate. Acceptance must be an
-    # optimizer-wide transaction; evaluating groups one at a time makes the
-    # result depend on parameter-group ordering and can leave a hybrid state.
-    for group, _, acc_param in candidates:
-        vector_to_parameters(acc_param, group['params'])
+    # Adaptive sketching uses the existing loss safeguard as an accuracy
+    # controller. A rejected approximation is retried with more rows, up to the
+    # configured maximum; the full plain step remains the transactional fallback.
+    for attempt, fraction in enumerate(
+            _sketch_fractions(self, safeguard_closure is not None)):
+        candidates = []
+        for group_index, (group, state, X) in enumerate(histories):
+            row_indices = _sketch_rows(
+                self, X, fraction, group_index, attempt,
+            )
+            acc_param = accel_fn(
+                X, self.acc_relaxation, self.acc_reg, self.acc_dtype,
+                equilibrate=self.acc_equilibrate,
+                filter_condition=self.acc_filter_condition,
+                refinement_steps=self.acc_refinement_steps,
+                row_indices=row_indices,
+            )
+            candidates.append((group, state, acc_param))
 
-    accepted, acc_loss = _safeguard_accept(self, safeguard_closure, base_loss)
+        # Apply every group before evaluating the candidate. Acceptance is an
+        # optimizer-wide transaction, independent of parameter-group ordering.
+        for group, _, acc_param in candidates:
+            vector_to_parameters(acc_param, group['params'])
 
-    for group, state, acc_param in candidates:
-        last_row = _last_row(state, capacity)
+        accepted, acc_loss = _safeguard_accept(
+            self, safeguard_closure, base_loss,
+        )
+        self.acc_last_sketch_fraction = fraction
         if accepted:
-            last_row.copy_(acc_param.to(device=last_row.device))
-        else:
-            buffer_row_to_parameters_(last_row, group['params'])
+            for _, state, acc_param in candidates:
+                _last_row(state, capacity).copy_(
+                    acc_param.to(device=state['buf'].device)
+                )
+            return acc_loss
 
-    return acc_loss if accepted else base_loss
+        # Restore the unaccelerated iterate before constructing a retry.
+        for group, state, _ in candidates:
+            buffer_row_to_parameters_(_last_row(state, capacity), group['params'])
+
+    return base_loss
 
 
 # ---------------------------------------------------------------------------
@@ -220,6 +289,11 @@ def accelerate(
     filter_condition: float = 0.0,
     refinement_steps: int = 0,
     safeguard: bool = True,
+    sketch_fraction: float = 1.0,
+    sketch_policy: str = "fixed",
+    sketch_growth_factor: float = 2.0,
+    sketch_max_fraction: float = 1.0,
+    sketch_seed: int = 0,
 ):
     """Wrap ``optimizer.step`` to apply Anderson-type acceleration.
 
@@ -273,6 +347,18 @@ def accelerate(
     safeguard : bool
         When true, a supplied closure is used to accept the optimizer-wide
         accelerated candidate only if it improves on the plain optimizer step.
+    sketch_fraction : float in (0, 1]
+        Fraction of coordinates, sampled independently within each parameter
+        group, used to estimate the mixing coefficients. The final candidate
+        is always assembled from the full parameter history.
+    sketch_policy : {"fixed", "adaptive"}
+        ``adaptive`` retries a rejected safeguarded candidate with progressively
+        more coordinates. Without a closure there is no rejection signal, so it
+        behaves like ``fixed``.
+    sketch_growth_factor, sketch_max_fraction : float
+        Multiplier and upper bound for adaptive retries.
+    sketch_seed : int
+        Non-negative seed for reproducible stratified coordinate samples.
     """
     if hasattr(optimizer, "acc_type"):
         raise ValueError(
@@ -310,6 +396,24 @@ def accelerate(
             or not isinstance(refinement_steps, int)
             or refinement_steps < 0):
         raise ValueError("refinement_steps must be a non-negative integer")
+    for name, value in (("sketch_fraction", sketch_fraction),
+                        ("sketch_max_fraction", sketch_max_fraction)):
+        if (not isinstance(value, (int, float)) or isinstance(value, bool)
+                or not math.isfinite(value) or not 0.0 < value <= 1.0):
+            raise ValueError(f"{name} must be in (0, 1]")
+    if sketch_max_fraction < sketch_fraction:
+        raise ValueError("sketch_max_fraction must be >= sketch_fraction")
+    if (not isinstance(sketch_growth_factor, (int, float))
+            or isinstance(sketch_growth_factor, bool)
+            or not math.isfinite(sketch_growth_factor)
+            or sketch_growth_factor <= 1.0):
+        raise ValueError("sketch_growth_factor must be greater than 1")
+    if (isinstance(sketch_seed, bool) or not isinstance(sketch_seed, int)
+            or sketch_seed < 0):
+        raise ValueError("sketch_seed must be a non-negative integer")
+    if not isinstance(sketch_policy, str) or sketch_policy.lower() not in {
+            "fixed", "adaptive"}:
+        raise ValueError("sketch_policy must be 'fixed' or 'adaptive'")
     # validate acceleration type early
     acc_type = acceleration_type.lower()
     if acc_type != "identity":
@@ -328,6 +432,12 @@ def accelerate(
     optimizer.acc_filter_condition = filter_condition
     optimizer.acc_refinement_steps = refinement_steps
     optimizer.acc_safeguard       = safeguard
+    optimizer.acc_sketch_fraction = float(sketch_fraction)
+    optimizer.acc_sketch_policy = sketch_policy.lower()
+    optimizer.acc_sketch_growth_factor = float(sketch_growth_factor)
+    optimizer.acc_sketch_max_fraction = float(sketch_max_fraction)
+    optimizer.acc_sketch_seed = sketch_seed
+    optimizer.acc_last_sketch_fraction = None
     optimizer.acc_average_pre_step = average and acc_type != "identity"
 
     # acceleration history: ring buffer per param group, lazily allocated
@@ -362,6 +472,9 @@ _ACC_ATTRS = (
     "acc_dtype",
     "acc_equilibrate", "acc_filter_condition", "acc_refinement_steps",
     "acc_safeguard",
+    "acc_sketch_fraction", "acc_sketch_policy", "acc_sketch_growth_factor",
+    "acc_sketch_max_fraction", "acc_sketch_seed",
+    "acc_last_sketch_fraction",
     "acc_average_pre_step",
     "acc_param_hist", "avg_param_hist",
     "acc_call_counter", "acc_store_counter",
