@@ -36,6 +36,27 @@ def _compute_differences(X):
     return DX, DR
 
 
+def _sketched_system(DR, b, row_indices):
+    """Return the rows used to estimate the Anderson mixing coefficients.
+
+    The full ``DR`` and ``b`` are deliberately retained by the caller for the
+    final extrapolation.  Sketching therefore changes only the inexpensive
+    mixing coefficients, never the dimensionality of the returned iterate.
+    """
+    if row_indices is None:
+        return DR, b
+    if (not isinstance(row_indices, torch.Tensor)
+            or row_indices.ndim != 1
+            or row_indices.dtype != torch.long):
+        raise ValueError("row_indices must be a one-dimensional torch.long tensor")
+    if row_indices.numel() == 0:
+        raise ValueError("row_indices must not be empty")
+    row_indices = row_indices.to(device=DR.device)
+    if int(row_indices.min()) < 0 or int(row_indices.max()) >= DR.size(0):
+        raise ValueError("row_indices contains an out-of-range row")
+    return DR.index_select(0, row_indices), b.index_select(0, row_indices)
+
+
 def _apply_relaxation(extr, X, DX, gamma, relaxation):
     if relaxation == 1:
         return extr
@@ -132,7 +153,7 @@ def _anderson_extrapolate(X, DX, DR, b, gamma, n_drop, relaxation):
 
 def anderson_qr_factorization(X, relaxation=1.0, regularization=0.0, dtype=None,
                               equilibrate=True, filter_condition=0.0,
-                              refinement_steps=0):
+                              refinement_steps=0, row_indices=None):
     # Anderson Acceleration
     # Take a matrix X of iterates such that X[:,i] = g(X[:,i-1])
     # Return acceleration for X[:,-1]
@@ -156,7 +177,8 @@ def anderson_qr_factorization(X, relaxation=1.0, regularization=0.0, dtype=None,
     b = DX[:, -1]
 
     # Matrix actually factorized (optionally in reduced precision).
-    DR_c = DR.to(compute_dtype) if downcast else DR
+    DR_s, b_s = _sketched_system(DR, b, row_indices)
+    DR_c = DR_s.to(compute_dtype) if downcast else DR_s
 
     # #4 Walker-Ni column filtering.
     n_drop = _num_oldest_to_drop(DR_c, filter_condition)
@@ -168,7 +190,7 @@ def anderson_qr_factorization(X, relaxation=1.0, regularization=0.0, dtype=None,
     else:
         A_s = DR_c
         scale = torch.ones(DR_c.size(1), device=DR_c.device, dtype=DR_c.dtype)
-    b_c = b.to(A_s.dtype)
+    b_c = b_s.to(A_s.dtype)
 
     # Solve min_y || A_s y - b ||_2 (+ Tikhonov) via QR + triangular solve.
     # For tall-skinny A_s (numel >> history) this is measurably faster and more
@@ -204,7 +226,7 @@ def anderson_qr_factorization(X, relaxation=1.0, regularization=0.0, dtype=None,
             return dy.squeeze(-1)
 
         scale_h = scale.to(orig_dtype)
-        y = _iterative_refine(y, DR[:, n_drop:], b, scale_h,
+        y = _iterative_refine(y, DR_s[:, n_drop:], b_s, scale_h,
                               regularization, refinement_steps, _corr)
         gamma = (y / scale_h).to(orig_dtype)
     else:
@@ -215,7 +237,7 @@ def anderson_qr_factorization(X, relaxation=1.0, regularization=0.0, dtype=None,
 
 def anderson_normal_equation(X, relaxation=1.0, regularization=0.0, dtype=None,
                              equilibrate=True, filter_condition=0.0,
-                             refinement_steps=0):
+                             refinement_steps=0, row_indices=None):
     # Anderson Acceleration via the normal equations
     # Take a matrix X of iterates such that X[:,i] = g(X[:,i-1])
     # Return acceleration for X[:,-1]
@@ -233,7 +255,8 @@ def anderson_normal_equation(X, relaxation=1.0, regularization=0.0, dtype=None,
     DX, DR = _compute_differences(X)
     b = DX[:, -1]
 
-    DR_c = DR.to(compute_dtype) if downcast else DR
+    DR_s, b_s = _sketched_system(DR, b, row_indices)
+    DR_c = DR_s.to(compute_dtype) if downcast else DR_s
 
     # #4 Walker-Ni column filtering.
     n_drop = _num_oldest_to_drop(DR_c, filter_condition)
@@ -245,7 +268,7 @@ def anderson_normal_equation(X, relaxation=1.0, regularization=0.0, dtype=None,
     else:
         A_s = DR_c
         scale = torch.ones(DR_c.size(1), device=DR_c.device, dtype=DR_c.dtype)
-    b_c = b.to(A_s.dtype)
+    b_c = b_s.to(A_s.dtype)
 
     RR = A_s.t() @ A_s
     if regularization != 0.0:
@@ -283,7 +306,7 @@ def anderson_normal_equation(X, relaxation=1.0, regularization=0.0, dtype=None,
                 return torch.linalg.solve(RR_h, g.unsqueeze(1)).view(-1)
 
         scale_h = scale.to(orig_dtype)
-        y = _iterative_refine(y, DR[:, n_drop:], b, scale_h,
+        y = _iterative_refine(y, DR_s[:, n_drop:], b_s, scale_h,
                               regularization, refinement_steps, _corr)
         gamma = (y / scale_h).to(orig_dtype)
     else:

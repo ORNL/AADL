@@ -98,12 +98,16 @@ AADL.accelerate(
     frequency=1,
     reg_acc=1e-8,
     safeguard=True,
+    sketch_fraction=0.1,
+    sketch_policy="adaptive",
+    sketch_max_fraction=1.0,
 )
 
 def closure():
-    with torch.enable_grad():
+    output = model(inputs)
+    loss = loss_fn(output, targets)
+    if torch.is_grad_enabled():
         optimizer.zero_grad()
-        loss = loss_fn(model(inputs), targets)
         loss.backward()
     return loss
 
@@ -138,6 +142,25 @@ loss = optimizer.step(closure)
   is met; `0` disables filtering.
 - `refinement_steps`: mixed-precision iterative-refinement iterations; `0`
   disables refinement.
+- `sketch_fraction`: fraction of coordinates used to estimate the Anderson
+  mixing coefficients. Sampling is stratified independently in each optimizer
+  parameter group; `1.0` (the default) preserves the full solve.
+- `sketch_policy`: `"fixed"` uses one sketch. `"adaptive"` retries a rejected
+  safeguarded candidate with a larger sketch until `sketch_max_fraction`.
+- `sketch_growth_factor`: coordinate-count multiplier for adaptive retries.
+- `sketch_seed`: seed for reproducible coordinate sampling.
+
+Sketching reduces the tall least-squares work while the final extrapolation
+still uses the complete parameter history. Adaptive retries require a closure:
+without a loss safeguard there is no rejection signal, so `"adaptive"` makes
+only the initial sketched attempt. Ordered stratified samples avoid the
+full-size permutation and reduce non-contiguous memory access, but the best
+fraction remains model- and hardware-dependent.
+
+The closure should guard backward work with `torch.is_grad_enabled()` as in
+the example. The optimizer invokes it with gradients enabled for its ordinary
+step; safeguard evaluations—including adaptive retries—run under
+`torch.no_grad()` and therefore require only forward passes.
 
 All size and cadence arguments are validated. Calling `accelerate` twice on the
 same optimizer raises an error; call `AADL.remove_acceleration(optimizer)`

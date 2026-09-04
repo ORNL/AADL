@@ -313,6 +313,11 @@ class TestAccelerateAPI(unittest.TestCase):
             {"relaxation": 0.0}, {"relaxation": 1.1}, {"reg_acc": -1.0},
             {"reg_acc": True}, {"filter_condition": -1.0},
             {"filter_condition": True}, {"refinement_steps": -1},
+            {"sketch_fraction": 0.0}, {"sketch_fraction": True},
+            {"sketch_max_fraction": 1.1},
+            {"sketch_fraction": 0.8, "sketch_max_fraction": 0.5},
+            {"sketch_policy": "unknown"}, {"sketch_growth_factor": 1.0},
+            {"sketch_seed": -1}, {"sketch_seed": True},
         )
         for kwargs in invalid:
             opt = torch.optim.SGD(self._fresh_model().parameters(), lr=1e-2)
@@ -389,6 +394,73 @@ class TestAccelerateAPI(unittest.TestCase):
         # transaction, including the individually beneficial first candidate.
         self.assertTrue(torch.allclose(p1.detach(), plain[0]))
         self.assertTrue(torch.allclose(p2.detach(), plain[1]))
+
+    def test_adaptive_sketch_retries_with_full_system(self):
+        import AADL.anderson_acceleration as anderson_mod
+
+        parameter = torch.nn.Parameter(torch.full((8,), 2.0))
+        opt = torch.optim.SGD([parameter], lr=0.1)
+        accelerate(
+            opt, acceleration_type="anderson", wait_iterations=0,
+            history_depth=4, frequency=1, sketch_fraction=0.25,
+            sketch_policy="adaptive", sketch_growth_factor=4.0,
+            sketch_max_fraction=1.0,
+        )
+
+        def closure():
+            with torch.enable_grad():
+                opt.zero_grad()
+                loss = parameter.square().sum()
+                loss.backward()
+            return loss
+
+        # Two entries do not yet trigger Anderson; the third step does.
+        opt.step(closure)
+        opt.step(closure)
+        sampled_rows = []
+
+        def _candidate(Xhist, *args, row_indices=None, **kwargs):
+            sampled_rows.append(Xhist.size(0) if row_indices is None
+                                else row_indices.numel())
+            if row_indices is not None:
+                return torch.full_like(Xhist[:, -1], 1e6)
+            return torch.zeros_like(Xhist[:, -1])
+
+        original = anderson_mod.get_acceleration
+        anderson_mod.get_acceleration = lambda acc_type: _candidate
+        try:
+            opt.step(closure)
+        finally:
+            anderson_mod.get_acceleration = original
+
+        self.assertEqual(sampled_rows, [2, 8])
+        self.assertTrue(torch.equal(parameter.detach(), torch.zeros_like(parameter)))
+        self.assertEqual(opt.acc_last_sketch_fraction, 1.0)
+
+    def test_safeguard_closures_are_loss_only(self):
+        parameter = torch.nn.Parameter(torch.full((8,), 2.0))
+        opt = torch.optim.SGD([parameter], lr=0.1)
+        accelerate(
+            opt, acceleration_type="anderson", wait_iterations=0,
+            history_depth=4, frequency=1,
+        )
+        grad_modes = []
+
+        def closure():
+            grad_modes.append(torch.is_grad_enabled())
+            loss = parameter.square().sum()
+            if torch.is_grad_enabled():
+                opt.zero_grad()
+                loss.backward()
+            return loss
+
+        for _ in range(3):
+            opt.step(closure)
+
+        # One gradient-bearing optimizer closure per step. The third step also
+        # evaluates the plain and accelerated losses without backward work.
+        self.assertEqual(grad_modes.count(True), 3)
+        self.assertGreaterEqual(grad_modes.count(False), 2)
 
     def test_closure_none_disables_safeguard(self):
         # With no closure there is no loss to compare against, so the safeguard

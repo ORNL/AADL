@@ -20,6 +20,13 @@ AADL owns:
 - invalidation of history after native model averaging;
 - scalar acceptance policies at global averaging boundaries.
 
+Coordinate sketching remains rank-local, just like each rank's Anderson
+history and coefficients. At a model-averaging boundary, the existing vote or
+sample-weighted mean-loss policy evaluates the resulting globally averaged
+candidate. Configure a fixed sketch with `safeguard=False` for this mode;
+adaptive sketch retries currently use the local closure safeguard and are not
+replayed after a global boundary rejection.
+
 ## Execution sequence
 
 During a normal local step:

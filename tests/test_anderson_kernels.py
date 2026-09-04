@@ -87,6 +87,34 @@ class AndersonKernelTests(unittest.TestCase):
             r_acc = (self.b - self.A @ x_acc).norm().item()
             self.assertLess(r_acc, r_last, f"{kernel.__name__} did not reduce residual")
 
+    def test_full_row_sketch_matches_unsketched_solve(self):
+        X = _richardson_history(self.A, self.b, self.x0, self.omega, n_iters=6)
+        rows = torch.arange(X.size(0), dtype=torch.long)
+        for kernel in (anderson_qr_factorization, anderson_normal_equation):
+            expected = kernel(X)
+            actual = kernel(X, row_indices=rows)
+            self.assertTrue(torch.allclose(actual, expected, atol=1e-12))
+
+    def test_reduced_row_sketch_returns_full_finite_iterate(self):
+        X = _richardson_history(self.A, self.b, self.x0, self.omega, n_iters=6)
+        rows = torch.tensor([0, 2, 4, 6], dtype=torch.long)
+        for kernel in (anderson_qr_factorization, anderson_normal_equation):
+            actual = kernel(X, regularization=1e-8, row_indices=rows)
+            self.assertEqual(actual.shape, X[:, -1].shape)
+            self.assertTrue(torch.isfinite(actual).all())
+
+    def test_invalid_row_sketch_raises(self):
+        X = _richardson_history(self.A, self.b, self.x0, self.omega, n_iters=6)
+        invalid = (
+            torch.tensor([], dtype=torch.long),
+            torch.tensor([0.0]),
+            torch.tensor([[0]], dtype=torch.long),
+            torch.tensor([X.size(0)], dtype=torch.long),
+        )
+        for rows in invalid:
+            with self.subTest(rows=rows), self.assertRaises(ValueError):
+                anderson_qr_factorization(X, row_indices=rows)
+
     def test_relaxation_one_is_default(self):
         X = _richardson_history(self.A, self.b, self.x0, self.omega, n_iters=6)
         for kernel in (anderson_qr_factorization, anderson_normal_equation):
